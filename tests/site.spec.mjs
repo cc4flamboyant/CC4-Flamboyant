@@ -10,7 +10,7 @@ test.beforeEach(() => test.skip(!configured, 'Falta a chave pública em js/confi
 
 test('início convida a entrar', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Igreja Conecta' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'CC4', exact: true })).toBeVisible();
   await expect(page.locator('.hero').getByRole('link', { name: 'Entrar' })).toBeVisible();
 });
 
@@ -109,7 +109,7 @@ test('Pix: QR Code e código Pix, mesmo sem entrar', async ({ page }) => {
   });
   await page.goto('/i/teste-a/');
   await page.getByRole('link', { name: 'Pix' }).click();
-  await expect(page.getByRole('heading', { name: 'Pix' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pix', exact: true })).toBeVisible();
   await expect(page.locator('#offer-qr svg')).toBeVisible();
   await expect(page.locator('.offer .key')).toHaveText(key);
 

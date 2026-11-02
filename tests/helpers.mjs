@@ -14,7 +14,7 @@ export const rest = (path) => `${SUPABASE_URL}/rest/v1/${path}`;
 // Senha das contas de teste: segredo TEST_USERS_PASSWORD no GitHub; no computador,
 // o arquivo tests/senha-testes.local criado por scripts/criar-usuarios-de-teste.mjs.
 export function testPassword() {
-  if (process.env.TEST_USERS_PASSWORD) return process.env.TEST_USERS_PASSWORD;
+  if (process.env.TEST_USERS_PASSWORD) return process.env.TEST_USERS_PASSWORD.trim();
   try {
     return readFileSync(new URL('./senha-testes.local', import.meta.url), 'utf8').trim();
   } catch {
