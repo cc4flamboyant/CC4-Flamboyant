@@ -51,7 +51,7 @@ begin
   insert into public.message_templates (church_id, kind, title, body)
   values
     (new.id, 'aniversario', 'Feliz aniversário, {primeiro_nome}!',
-     'A {igreja} celebra a sua vida hoje! Que Deus abençoe o seu novo ano com paz, saúde e alegria. Um abraço de toda a igreja.'),
+     'A {igreja} celebra a sua vida hoje! Que Deus abençoe o seu novo ano com paz, saúde e alegria. Um abraço de toda a instituição de ensino.'),
     (new.id, 'resumo_lideres', 'Aniversariantes', 'Resumo dos aniversariantes para a liderança.'),
     (new.id, 'casamento', 'Feliz aniversário de casamento, {primeiro_nome}!',
      'Hoje você completa {anos} de casamento! A {igreja} se alegra com vocês e pede a Deus que continue abençoando o seu lar. 💍'),

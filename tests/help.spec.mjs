@@ -44,7 +44,7 @@ test('não oferece instalar enquanto a página da igreja não tem o ícone atual
   // A Teste A nunca ganha pasta própria: a página não traz a versão do ícone.
   await openLoggedIn(page, accounts['membro-a'].session, '/i/teste-a/#/ajuda');
   await page.getByText('Instalar o app no celular').click();
-  await expect(page.locator('#help-install')).toContainText('O ícone novo da igreja está sendo preparado');
+  await expect(page.locator('#help-install')).toContainText('O ícone novo da instituição de ensino está sendo preparado');
 
   // Página publicada com o ícone atual (como build-site.mjs gera): o aviso some.
   await page.route('**/i/teste-a/', async (route) => {
@@ -60,7 +60,7 @@ test('não oferece instalar enquanto a página da igreja não tem o ícone atual
 test('o administrador vê tudo, com o endereço do app para divulgar', async ({ page }) => {
   await openLoggedIn(page, accounts['adm-a'].session, '/i/teste-a/#/ajuda');
   await expect(page.getByRole('heading', { name: 'Para o administrador' })).toBeVisible();
-  await page.getByText('Divulgar o app para a igreja').click();
+  await page.getByText('Divulgar o app para a instituição de ensino').click();
   await expect(page.locator('#app-url')).toHaveText(/\/i\/teste-a\/$/);
 });
 
@@ -124,7 +124,7 @@ test('a configuração do Pix valida a chave antes de salvar', async ({ page }) 
   await page.getByLabel('Pix', { exact: true }).check();
   await page.getByLabel('Chave Pix').fill('');
   await save.click();
-  await expect(page.locator('#toast')).toHaveText('Para ligar o Pix, preencha a chave Pix da igreja.');
+  await expect(page.locator('#toast')).toHaveText('Para ligar o Pix, preencha a chave Pix da instituição de ensino.');
 
   await page.getByLabel('Tipo de chave').selectOption('cpf');
   await page.getByLabel('Chave Pix').fill('123.456.789-09');

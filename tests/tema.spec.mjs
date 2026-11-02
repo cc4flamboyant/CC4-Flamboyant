@@ -67,7 +67,7 @@ test('no tema escuro, o admin escolhe o fundo preto ou na cor principal; os bot�
     expect(await bg(page)).toBe('rgb(17, 19, 24)'); // preto, como sempre foi
     const color = await page.getByLabel('Cor principal', { exact: true }).inputValue();
 
-    await page.getByLabel('Cor principal da igreja').check();
+    await page.getByLabel('Cor principal da instituição de ensino').check();
     await page.getByRole('button', { name: 'Salvar' }).click();
     await expect(page.locator('#toast')).toContainText(/salva|Pronto/);
     await expect(page.locator('html')).toHaveAttribute('data-dark-theme', 'principal');

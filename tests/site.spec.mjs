@@ -72,7 +72,7 @@ test('nenhuma tela deixa dar zoom (pinça ou dois toques)', async ({ page }) => 
 
 test('igreja que não existe', async ({ page }) => {
   await page.goto('/i/nao-existe-esta/');
-  await expect(page.getByRole('heading', { name: 'Igreja não encontrada' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Instituição de ensino não encontrada' })).toBeVisible();
 });
 
 test('página que não existe', async ({ page }) => {
@@ -132,5 +132,5 @@ test('Pix some com a funcionalidade desligada', async ({ page }) => {
   await expect(page.locator('.church-hero h1')).toHaveText('Igreja Teste A');
   await expect(page.getByRole('link', { name: 'Pix' })).toHaveCount(0);
   await page.goto('/i/teste-a/#/pix');
-  await expect(page.getByText('A igreja ainda não informou uma chave Pix.')).toBeVisible();
+  await expect(page.getByText('A instituição de ensino ainda não informou uma chave Pix.')).toBeVisible();
 });

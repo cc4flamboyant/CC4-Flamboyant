@@ -56,8 +56,8 @@ export async function syncPush(sb) {
 }
 
 // Antes, a inscrição de todas as páginas ficava no service worker da raiz do site. Agora cada
-// igreja tem o seu (o mesmo endereço do app instalado). Na página da igreja, se o aparelho já
-// tinha aceitado, passa a inscrição para o service worker da igreja e apaga a antiga, sem
+// instituição de ensino tem o seu (o mesmo endereço do app instalado). Na página da instituição de ensino, se o aparelho já
+// tinha aceitado, passa a inscrição para o service worker da instituição de ensino e apaga a antiga, sem
 // precisar ativar de novo.
 export async function movePushToPage(sb, rootUrl, vapidKey) {
   if (pushSupport() !== 'ok' || Notification.permission !== 'granted') return;

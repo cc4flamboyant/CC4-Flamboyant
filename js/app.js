@@ -29,16 +29,16 @@ const churchUrl = (slug) => `${ROOT_URL}i/${slug}/`;
 const state = {
   user: null,
   platformAdmin: false,
-  memberships: [], // { id, role, consent_at, church: {...} } de todas as igrejas da pessoa
-  church: null, // igreja desta página
+  memberships: [], // { id, role, consent_at, church: {...} } de todas as instituições de ensino da pessoa
+  church: null, // instituição de ensino desta página
 };
 
-// Cadastro da pessoa na igreja desta página (pode estar esperando o aceite).
+// Cadastro da pessoa na instituição de ensino desta página (pode estar esperando o aceite).
 const myMember = () => state.memberships.find((m) => m.church.id === state.church?.id) ?? null;
 const isActiveMember = () => !!myMember()?.consent_at;
 const myRole = () => (isActiveMember() ? myMember().role : null);
 const featureOn = (key) => !!state.church?.features?.[key];
-// Alfinete da igreja no mapa: ponto de partida para marcar eventos e células.
+// Alfinete da instituição de ensino no mapa: ponto de partida para marcar eventos e células.
 const churchPin = () => (state.church?.lat != null ? { lat: state.church.lat, lng: state.church.lng } : null);
 // Pastor (administrador) e líderes: leem os pedidos de oração privados e moderam o mural.
 // Datas comemoradas: aniversário (funcionalidade "aniversarios") e casamento e batismo ("datas_especiais").
@@ -57,7 +57,7 @@ const offerReady = () => featureOn('pix') && !!state.church?.pix_key;
 
 // ---------------------------------------------------------------------
 // Telas que abrem na hora: guarda (na memória e no aparelho) o que veio do banco da última
-// vez, desenha com isso e confere com o banco em seguida. Vale só para a conta e a igreja
+// vez, desenha com isso e confere com o banco em seguida. Vale só para a conta e a instituição de ensino
 // atuais, e é apagado ao sair da conta. As permissões continuam no banco.
 // ---------------------------------------------------------------------
 const SCREEN_PREFIX = 'tela:';
@@ -270,7 +270,7 @@ function toast(msg, kind = '', action = null) {
   toastTimer = setTimeout(() => (el.hidden = true), kind === 'error' ? 6000 : action ? 6000 : 3500);
 }
 
-// Pergunta numa janela do app, com o nome da igreja no topo (a janela do navegador, confirm/prompt,
+// Pergunta numa janela do app, com o nome da instituição de ensino no topo (a janela do navegador, confirm/prompt,
 // mostraria o endereço do site). Devolve true/false; com `input`, o texto digitado (ou null se cancelou).
 // O botão da ação diz o que faz ("Apagar", "Excluir"…, tirado da própria pergunta) e fica vermelho
 // quando apaga ou tira algo. Esc e "Cancelar" desistem; Enter confirma.
@@ -323,7 +323,7 @@ const fabMenu = (label, items) => `
     <div class="fab-options">${items.map(([href, text]) => `<a class="btn" href="${href}">${esc(text)}</a>`).join('')}</div>
   </details>`;
 
-// Folha para imprimir ou salvar PDF (skill folha-para-imprimir): logo e nome da igreja no topo;
+// Folha para imprimir ou salvar PDF (skill folha-para-imprimir): logo e nome da instituição de ensino no topo;
 // assinaturas e rodapé só aparecem no papel.
 const sheetHead = (title, accent, sub = '') => `
   <header class="sheet-head">
@@ -356,7 +356,7 @@ function drawSheet({ back, backText, title, accent, sub, body, signs, file }) {
       </article>
       <div class="sheet-actions no-print">
         <button type="button" class="btn primary big" id="print">${icon.print} Imprimir ou salvar PDF</button>
-        <p class="hint">Sai numa folha A4. No celular, escolha <strong>Salvar como PDF</strong> para mandar no grupo da igreja.</p>
+        <p class="hint">Sai numa folha A4. No celular, escolha <strong>Salvar como PDF</strong> para mandar no grupo da instituição de ensino.</p>
       </div>
     </div>`;
   document.getElementById('print').onclick = () => printAs(file);
@@ -380,8 +380,8 @@ function errorText(err) {
   if (/rate limit|too many|only request this after/i.test(msg))
     return 'Muitos pedidos de link de acesso em pouco tempo. Espere alguns minutos e tente de novo (ou entre com o Google).';
   if (/provider is not enabled/i.test(msg)) return 'O login com Google ainda não está ligado. Use o link pelo e-mail.';
-  if (/duplicate key.*slug/i.test(msg)) return 'Já existe uma igreja com esse endereço.';
-  if (/duplicate key.*email/i.test(msg)) return 'Esse e-mail já está no cadastro desta igreja.';
+  if (/duplicate key.*slug/i.test(msg)) return 'Já existe uma instituição de ensino com esse endereço.';
+  if (/duplicate key.*email/i.test(msg)) return 'Esse e-mail já está no cadastro desta instituição de ensino.';
   if (/ministries_visitors_idx/i.test(msg)) return 'Outro ministério já recebe os avisos de visitantes. Desmarque nele primeiro.';
   if (/ministries_kids_idx/i.test(msg)) return 'Outro ministério já faz o check-in das crianças. Desmarque nele primeiro.';
   if (/ministries_attendance_idx/i.test(msg)) return 'Outro ministério já marca a presença nos cultos. Desmarque nele primeiro.';
@@ -436,10 +436,10 @@ const icon = {
 };
 
 const SOCIAL = [
-  ['instagram', 'Instagram', 'https://instagram.com/suaigreja'],
-  ['youtube', 'YouTube', 'https://youtube.com/@suaigreja'],
-  ['facebook', 'Facebook', 'https://facebook.com/suaigreja'],
-  ['site', 'Site', 'https://suaigreja.com.br'],
+  ['instagram', 'Instagram', 'https://instagram.com/suaescola'],
+  ['youtube', 'YouTube', 'https://youtube.com/@suaescola'],
+  ['facebook', 'Facebook', 'https://facebook.com/suaescola'],
+  ['site', 'Site', 'https://suaescola.com.br'],
 ];
 
 // ---------------------------------------------------------------------
@@ -487,7 +487,7 @@ systemDark.addEventListener?.('change', () => {
 updateThemeButton();
 
 // ---------------------------------------------------------------------
-// Aparência da igreja (cor, nome, logo)
+// Aparência da instituição de ensino (cor, nome, logo)
 // ---------------------------------------------------------------------
 const DEFAULT_COLOR = '#3b5bdb';
 
@@ -557,7 +557,7 @@ function renderAccountLink() {
   document.getElementById('notif-link').hidden = !(state.church && isActiveMember());
 }
 
-// Número no sininho: notificações não lidas desta igreja.
+// Número no sininho: notificações não lidas desta instituição de ensino.
 async function refreshUnread() {
   const badge = document.getElementById('notif-badge');
   if (!state.church || !isActiveMember()) return (badge.hidden = true);
@@ -722,7 +722,7 @@ async function viewLogin(ctx) {
   $view.innerHTML = `
     <div class="auth">
       <h1>Entrar</h1>
-      <p class="hint">Use o mesmo e-mail que você deu à secretaria da sua igreja. Assim o app encontra o seu cadastro.</p>
+      <p class="hint">Use o mesmo e-mail que você deu à secretaria da sua instituição de ensino. Assim o app encontra o seu cadastro.</p>
       <button class="btn google big" id="google" hidden>
         <svg viewBox="0 0 24 24" class="g"><path fill="#4285F4" d="M22.5 12.2c0-.8-.1-1.5-.2-2.2H12v4.2h5.9a5 5 0 0 1-2.2 3.3v2.7h3.5c2.1-1.9 3.3-4.7 3.3-8z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.5-2.7c-1 .7-2.3 1.1-3.8 1.1-2.9 0-5.4-2-6.3-4.6H2.1v2.8A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.7 14.1a6.6 6.6 0 0 1 0-4.2V7.1H2.1a11 11 0 0 0 0 9.8z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.1-3.1A11 11 0 0 0 2.1 7.1l3.6 2.8C6.6 7.3 9.1 5.4 12 5.4z"/></svg>
         Entrar com Google
@@ -766,7 +766,7 @@ async function signOut() {
 }
 
 // ---------------------------------------------------------------------
-// Raiz do site: escolher a igreja
+// Raiz do site: escolher a instituição de ensino
 // ---------------------------------------------------------------------
 function churchRow(c, extra = '') {
   return `
@@ -783,26 +783,26 @@ async function viewRootHome() {
       <section class="hero">
         <img src="icons/icon-192.png" alt="" width="72" height="72">
         <h1>${esc(CONFIG.APP_NAME)}</h1>
-        <p>Agenda, avisos e aniversariantes da sua igreja, no celular.</p>
+        <p>Agenda, avisos e aniversariantes da sua instituição de ensino, no celular.</p>
         <a class="btn primary big" href="#/entrar">Entrar</a>
-        <p class="hint">Sua igreja ainda não usa? Fale com a liderança dela.</p>
+        <p class="hint">Sua instituição de ensino ainda não usa? Fale com a liderança dela.</p>
       </section>`;
     return;
   }
   const list = state.memberships;
-  // Uma igreja só: vai direto para ela.
+  // Uma instituição de ensino só: vai direto para ela.
   if (list.length === 1 && !state.platformAdmin) {
     location.replace(churchUrl(list[0].church.slug));
     return;
   }
   $view.innerHTML = `
     <div class="page">
-      <h1>Suas igrejas</h1>
+      <h1>Suas instituições de ensino</h1>
       ${
         list.length
           ? `<div class="list">${list.map((m) => churchRow(m.church, `<small>${m.consent_at ? esc(ROLES[m.role]) : 'Convite para aceitar'}</small>`)).join('')}</div>`
           : `<div class="notice"><strong>Ainda não encontramos seu cadastro.</strong>
-               <p>O e-mail ${esc(state.user.email)} não está no cadastro de nenhuma igreja. Peça à secretaria da sua igreja para cadastrar você com este e-mail e entre de novo.</p></div>`
+               <p>O e-mail ${esc(state.user.email)} não está no cadastro de nenhuma instituição de ensino. Peça à secretaria da sua instituição de ensino para cadastrar você com este e-mail e entre de novo.</p></div>`
       }
       ${state.platformAdmin ? `<a class="btn" href="#/plataforma">${icon.shield} Administração da plataforma</a>` : ''}
     </div>`;
@@ -815,7 +815,7 @@ async function viewAccount() {
       <h1>Sua conta</h1>
       <p class="hint">${esc(state.user.email)}</p>
       <div class="list">
-        <a class="menu-row" href="#/">${icon.church}<span>Suas igrejas</span>${icon.chevron}</a>
+        <a class="menu-row" href="#/">${icon.church}<span>Suas instituições de ensino</span>${icon.chevron}</a>
         ${state.platformAdmin ? `<a class="menu-row" href="#/plataforma">${icon.shield}<span>Administração da plataforma</span>${icon.chevron}</a>` : ''}
         <a class="menu-row" href="#/meus-dados">${icon.user}<span>Meus dados</span>${icon.chevron}</a>
         <a class="menu-row" href="privacidade.html">${icon.shield}<span>Política de privacidade</span>${icon.chevron}</a>
@@ -827,7 +827,7 @@ async function viewAccount() {
 }
 
 // ---------------------------------------------------------------------
-// Administração da plataforma: criar igrejas e definir o administrador de cada uma
+// Administração da plataforma: criar instituições de ensino e definir o administrador de cada uma
 // ---------------------------------------------------------------------
 async function viewPlatform(ctx) {
   if (!requireLogin('/plataforma')) return;
@@ -842,7 +842,7 @@ async function viewPlatform(ctx) {
   $view.innerHTML = `
     <div class="page">
       <h1>Plataforma</h1>
-      <h2>Igrejas (${churches.length})</h2>
+      <h2>Instituições de ensino (${churches.length})</h2>
       <div class="list">
         ${churches
           .map(
@@ -859,16 +859,16 @@ async function viewPlatform(ctx) {
       </div>
 
       <form id="new-church" class="form card">
-        <h2>Nova igreja</h2>
-        <label>Nome da igreja<input name="name" required maxlength="80" placeholder="Igreja Batista Central"></label>
+        <h2>Nova instituição de ensino</h2>
+        <label>Nome da instituição de ensino<input name="name" required maxlength="80" placeholder="Colégio São Paulo"></label>
         <label>Endereço no app
           <span class="prefix-input"><span>/i/</span><input name="slug" required maxlength="40" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="batista-central"></span>
           <small class="hint">Letras minúsculas, números e hífens. Não dá para mudar depois.</small>
         </label>
-        <label>E-mail do administrador da igreja<input name="email" type="email" required placeholder="pastor@exemplo.com"></label>
+        <label>E-mail do administrador da instituição de ensino<input name="email" type="email" required placeholder="pastor@exemplo.com"></label>
         <label>Nome do administrador<input name="admin_name" maxlength="120"></label>
-        <button class="btn primary">Criar igreja</button>
-        <p class="hint">O administrador entra no app com esse e-mail, aceita o convite e configura a igreja. O ícone próprio da igreja aparece na próxima publicação do site.</p>
+        <button class="btn primary">Criar instituição de ensino</button>
+        <p class="hint">O administrador entra no app com esse e-mail, aceita o convite e configura a instituição de ensino. O ícone próprio da instituição de ensino aparece na próxima publicação do site.</p>
       </form>
     </div>`;
 
@@ -892,7 +892,7 @@ async function viewPlatform(ctx) {
     });
     btn.disabled = false;
     if (error) return toast(errorText(error), 'error');
-    toast('Igreja criada.');
+    toast('Instituição de ensino criada.');
     await loadMemberships();
     render();
   });
@@ -909,7 +909,7 @@ async function viewPlatform(ctx) {
     };
     row.querySelector('[data-active]').onclick = async (e) => {
       const active = e.currentTarget.dataset.active === 'true';
-      if (!active && !await ask('Desativar esta igreja? Ninguém mais acessa o app dela até você reativar.')) return;
+      if (!active && !await ask('Desativar esta instituição de ensino? Ninguém mais acessa o app dela até você reativar.')) return;
       const { error } = await sb.rpc('set_church_active', { p_church: id, p_active: active });
       if (error) return toast(errorText(error), 'error');
       render();
@@ -918,7 +918,7 @@ async function viewPlatform(ctx) {
 }
 
 // ---------------------------------------------------------------------
-// Página da igreja
+// Página da instituição de ensino
 // ---------------------------------------------------------------------
 // Só links https:// viram botão (um "javascript:" gravado direto no banco não roda; o banco também barra).
 const safeLink = (v) => typeof v === 'string' && /^https:\/\/[^\s"<>'`]+$/i.test(v);
@@ -934,7 +934,7 @@ function aboutCard(c) {
   if (!c.about_text && !c.address && !Object.keys(c.social || {}).length) return '';
   return `
     <section class="card">
-      <h2>Sobre a igreja</h2>
+      <h2>Sobre a instituição de ensino</h2>
       ${c.about_text ? `<p class="pre">${esc(c.about_text)}</p>` : ''}
       ${c.address ? `<p class="meta">${icon.pin}${esc(c.address)}${c.city ? ` · ${esc(c.city)}` : ''}</p>` : ''}
       ${placeBlock({ lat: c.lat, lng: c.lng, address: [c.address, c.city].filter(Boolean).join(', ') })}
@@ -949,15 +949,15 @@ function viewInvite(m) {
     <div class="page">
       <h1>Bem-vindo, ${esc(m.name.split(' ')[0])}!</h1>
       <div class="card">
-        <p><strong>${esc(c.name)}</strong> cadastrou você no app da igreja.</p>
-        <p>Para participar, a igreja guarda o seu nome, e-mail e, se você informou, telefone, data de nascimento e foto. Isso serve para os avisos, a agenda e as mensagens de aniversário.</p>
+        <p><strong>${esc(c.name)}</strong> cadastrou você no app da instituição de ensino.</p>
+        <p>Para participar, a instituição de ensino guarda o seu nome, e-mail e, se você informou, telefone, data de nascimento e foto. Isso serve para os avisos, a agenda e as mensagens de aniversário.</p>
         <ul class="bullets">
           <li>As datas e o telefone ficam visíveis só para a liderança, a não ser que você autorize no seu cadastro.</li>
           <li>Você pode ver, corrigir, exportar e excluir os seus dados quando quiser.</li>
         </ul>
-        <p class="hint">Leia a <a href="privacidade.html" target="_blank">Política de Privacidade</a>, os <a href="termos.html" target="_blank">Termos de uso</a>${c.privacy_text ? ` e o <a href="#/privacidade">complemento da igreja</a>` : ''}.</p>
+        <p class="hint">Leia a <a href="privacidade.html" target="_blank">Política de Privacidade</a>, os <a href="termos.html" target="_blank">Termos de uso</a>${c.privacy_text ? ` e o <a href="#/privacidade">complemento da instituição de ensino</a>` : ''}.</p>
         <button class="btn primary big" id="accept">Aceito participar</button>
-        <button class="btn link" id="decline">Não sou desta igreja</button>
+        <button class="btn link" id="decline">Não sou desta instituição de ensino</button>
       </div>
     </div>`;
   document.getElementById('accept').onclick = async () => {
@@ -972,7 +972,7 @@ function viewInvite(m) {
     if (!await ask(`Tirar o seu e-mail do cadastro de ${c.name}?`)) return;
     const { error } = await sb.rpc('respond_to_church', { p_church: c.id, p_accept: false });
     if (error) return toast(errorText(error), 'error');
-    toast('Pronto. Seu e-mail saiu do cadastro desta igreja.');
+    toast('Pronto. Seu e-mail saiu do cadastro desta instituição de ensino.');
     await loadMemberships();
     location.href = ROOT_URL;
   };
@@ -995,8 +995,8 @@ async function viewChurchHome() {
       <div class="page">
         ${head}
         <a class="btn primary big" href="#/entrar">Entrar</a>
-        <p class="hint center">Entre com o e-mail que você deu à secretaria da igreja.</p>
-        ${offerReady() ? `<a class="btn" href="#/pix">${icon.pix} Pix da igreja</a>` : ''}
+        <p class="hint center">Entre com o e-mail que você deu à secretaria da instituição de ensino.</p>
+        ${offerReady() ? `<a class="btn" href="#/pix">${icon.pix} Pix da instituição de ensino</a>` : ''}
         
         ${aboutCard(c)}
       </div>`;
@@ -1006,7 +1006,7 @@ async function viewChurchHome() {
     $view.innerHTML = `
       <div class="page">
         ${head}
-        <div class="notice"><strong>Você ainda não está no cadastro desta igreja.</strong>
+        <div class="notice"><strong>Você ainda não está no cadastro desta instituição de ensino.</strong>
           <p>O e-mail ${esc(state.user.email)} não foi encontrado. Peça à secretaria para cadastrar você com este e-mail e entre de novo.</p></div>
         <button class="btn" id="logout">Entrar com outro e-mail</button>
         ${aboutCard(c)}
@@ -1104,8 +1104,8 @@ async function viewMenu() {
       <div class="list">
         <a class="menu-row" href="#/perfil">${icon.user}<span>Meu cadastro</span>${icon.chevron}</a>
         ${isLeaderRole(m.role) ? `<a class="menu-row" href="#/membros">${icon.users}<span>Membros</span>${icon.chevron}</a>` : ''}
-        ${admin ? `<a class="menu-row" href="#/config">${icon.gear}<span>Configurar a igreja</span>${icon.chevron}</a>` : ''}
-        ${state.memberships.length > 1 || state.platformAdmin ? `<a class="menu-row" href="${esc(ROOT_URL)}">${icon.swap}<span>Trocar de igreja</span>${icon.chevron}</a>` : ''}
+        ${admin ? `<a class="menu-row" href="#/config">${icon.gear}<span>Configurar a instituição de ensino</span>${icon.chevron}</a>` : ''}
+        ${state.memberships.length > 1 || state.platformAdmin ? `<a class="menu-row" href="${esc(ROOT_URL)}">${icon.swap}<span>Trocar de instituição de ensino</span>${icon.chevron}</a>` : ''}
         ${featureOn('agenda') ? `<a class="menu-row" href="#/calendario">${icon.calendar}<span>Calendário</span>${icon.chevron}</a>` : ''}
         ${datesOn() ? `<a class="menu-row" href="#/aniversariantes">${icon.cake}<span>Aniversariantes do mês</span>${icon.chevron}</a>` : ''}
         ${featureOn('salas') ? `<a class="menu-row" href="#/filhos">${icon.child}<span>Meus filhos</span>${icon.chevron}</a>` : ''}
@@ -1143,7 +1143,7 @@ async function viewChurchPrivacy() {
 }
 
 // ---------------------------------------------------------------------
-// Meus dados (LGPD): baixar, sair desta igreja, excluir a conta
+// Meus dados (LGPD): baixar, sair desta instituição de ensino, excluir a conta
 // ---------------------------------------------------------------------
 async function viewMyData() {
   if (!requireLogin('/meus-dados')) return;
@@ -1155,24 +1155,24 @@ async function viewMyData() {
 
       <section class="card">
         <h2>${icon.upload} Baixar meus dados</h2>
-        <p>Um arquivo com tudo o que o app guarda sobre você: os seus cadastros em cada igreja, as suas células e presenças, os seus ministérios e escalas, as suas inscrições em eventos, os seus filhos e as entradas deles no infantil, as suas presenças nos cultos, os dados da carteirinha, os álbuns que publicou e os pedidos para tirar fotos, as suas conversas do chat, os seus pedidos de oração, os seus planos de leitura, as notificações, as mensagens enviadas, os aparelhos com notificação e o que você publicou.</p>
+        <p>Um arquivo com tudo o que o app guarda sobre você: os seus cadastros em cada instituição de ensino, as suas células e presenças, os seus ministérios e escalas, as suas inscrições em eventos, os seus filhos e as entradas deles no infantil, as suas presenças nos cultos, os dados da carteirinha, os álbuns que publicou e os pedidos para tirar fotos, as suas conversas do chat, os seus pedidos de oração, os seus planos de leitura, as notificações, as mensagens enviadas, os aparelhos com notificação e o que você publicou.</p>
         <button class="btn" id="export">Baixar arquivo</button>
-        <p class="hint">Para corrigir algum dado, use "Meu cadastro" ou fale com a secretaria da igreja.</p>
+        <p class="hint">Para corrigir algum dado, use "Meu cadastro" ou fale com a secretaria da instituição de ensino.</p>
       </section>
 
       ${
         here
           ? `<section class="card">
               <h2>Sair da ${esc(state.church.name)}</h2>
-              <p>O seu cadastro, a sua foto, os seus pedidos de oração e os seus planos de leitura nesta igreja são apagados, e você deixa de receber as mensagens dela. A sua conta e as outras igrejas continuam.</p>
-              <button class="btn danger-outline" id="leave">Sair desta igreja</button>
+              <p>O seu cadastro, a sua foto, os seus pedidos de oração e os seus planos de leitura nesta instituição de ensino são apagados, e você deixa de receber as mensagens dela. A sua conta e as outras instituições de ensino continuam.</p>
+              <button class="btn danger-outline" id="leave">Sair desta instituição de ensino</button>
             </section>`
           : ''
       }
 
       <section class="card danger-zone">
         <h2>Excluir minha conta</h2>
-        <p>Apaga a sua conta e os seus cadastros em <strong>todas</strong> as igrejas, com fotos, pedidos de oração, notificações e aparelhos. Não dá para desfazer. Os eventos e avisos que você publicou continuam na igreja, sem o seu nome.</p>
+        <p>Apaga a sua conta e os seus cadastros em <strong>todas</strong> as instituições de ensino, com fotos, pedidos de oração, notificações e aparelhos. Não dá para desfazer. Os eventos e avisos que você publicou continuam na instituição de ensino, sem o seu nome.</p>
         <label>Para confirmar, digite EXCLUIR<input id="confirm-delete" autocomplete="off" autocapitalize="characters"></label>
         <button class="btn danger-outline" id="delete" disabled>Excluir minha conta para sempre</button>
       </section>
@@ -1196,7 +1196,7 @@ async function viewMyData() {
 
   const leaveBtn = document.getElementById('leave');
   leaveBtn?.addEventListener('click', async () => {
-    if (!await ask(`Sair da ${state.church.name}? O seu cadastro nesta igreja será apagado.`)) return;
+    if (!await ask(`Sair da ${state.church.name}? O seu cadastro nesta instituição de ensino será apagado.`)) return;
     leaveBtn.disabled = true;
     try {
       if (here.consent_at) await removeMemberPhotos(state.church.id, here.id);
@@ -1250,7 +1250,7 @@ function helpTopics() {
          <li><strong>iPhone (Safari):</strong> toque em Compartilhar (o quadrado com a seta) e em <em>Adicionar à Tela de Início</em>.</li>
        </ul>
        <p>Depois, abra sempre pelo ícone.</p>
-       <p>Se a igreja trocou o ícone depois que você instalou: no <strong>iPhone</strong>, o ícone não muda sozinho; apague o app da tela inicial e instale de novo. No <strong>Android</strong>, ele costuma se atualizar sozinho em alguns dias, ou na hora se você desinstalar e instalar de novo.</p>
+       <p>Se a instituição de ensino trocou o ícone depois que você instalou: no <strong>iPhone</strong>, o ícone não muda sozinho; apague o app da tela inicial e instale de novo. No <strong>Android</strong>, ele costuma se atualizar sozinho em alguns dias, ou na hora se você desinstalar e instalar de novo.</p>
        <div id="help-install"></div>`,
     ],
     [
@@ -1260,13 +1260,13 @@ function helpTopics() {
          <li><strong>Entrar com Google:</strong> o jeito mais rápido, se o seu e-mail for do Gmail.</li>
          <li><strong>Link pelo e-mail:</strong> você recebe um link; abra no mesmo aparelho e navegador em que pediu.</li>
        </ul>
-       <p>Na primeira vez, aparece um convite: toque em <em>Aceito participar</em>. Se não for da igreja, toque em <em>Não sou desta igreja</em> e o seu e-mail sai do cadastro.</p>`,
+       <p>Na primeira vez, aparece um convite: toque em <em>Aceito participar</em>. Se não for da instituição de ensino, toque em <em>Não sou desta instituição de ensino</em> e o seu e-mail sai do cadastro.</p>`,
     ],
     [
       'Notificações no celular',
       `<p>Em <a href="#/notificacoes">Menu &gt; Notificações</a>, toque em <em>Ativar neste aparelho</em>. Você recebe:</p>
        <ul class="bullets">
-         ${features('aniversarios') ? '<li>a mensagem da igreja no dia do seu aniversário, às 7h;</li>' : ''}
+         ${features('aniversarios') ? '<li>a mensagem da instituição de ensino no dia do seu aniversário, às 7h;</li>' : ''}
          
          ${features('agenda') ? '<li>os lembretes dos eventos da agenda;</li>' : ''}
          ${features('avisos') ? '<li>os avisos que a liderança mandar com notificação (chegam em até uns 15 minutos);</li>' : ''}
@@ -1287,7 +1287,7 @@ function helpTopics() {
         ]]
       : []),
     ...(features('avisos')
-      ? [['Avisos', '<p>A aba <a href="#/avisos">Avisos</a> traz os recados da igreja. Os mais importantes ficam fixados no topo, e alguns somem depois de uma data.</p>']]
+      ? [['Avisos', '<p>A aba <a href="#/avisos">Avisos</a> traz os recados da instituição de ensino. Os mais importantes ficam fixados no topo, e alguns somem depois de uma data.</p>']]
       : []),
     ...(datesOn()
       ? [[
@@ -1299,10 +1299,10 @@ function helpTopics() {
     ...(features('galeria')
       ? [[
           'Galeria de fotos',
-          `<p>Em <a href="#/galeria">Menu &gt; Galeria de fotos</a> ficam os álbuns da igreja. Toque numa foto para ver em tela cheia, passar para o lado, baixar ou compartilhar. Só quem é da igreja vê as fotos.</p>
+          `<p>Em <a href="#/galeria">Menu &gt; Galeria de fotos</a> ficam os álbuns da instituição de ensino. Toque numa foto para ver em tela cheia, passar para o lado, baixar ou compartilhar. Só quem é da instituição de ensino vê as fotos.</p>
            <p>Se você aparece numa foto e prefere que ela saia, toque em <em>Pedir para tirar esta foto</em>: quem publica a galeria recebe o pedido.</p>${
              galleryTeam()
-               ? `<p><strong>Se você publica na galeria:</strong> toque no botão <strong>+</strong>, embaixo à direita, para criar o álbum e, dentro dele, em <em>Adicionar fotos</em> (dá para escolher várias de uma vez). O app reduz cada foto no celular antes de enviar, para gastar pouco espaço. A igreja pode ter até ${GALLERY_LIMIT} fotos: apague álbuns antigos quando chegar perto. Evite fotos de crianças em que elas apareçam de perto sem a autorização dos pais.</p>`
+               ? `<p><strong>Se você publica na galeria:</strong> toque no botão <strong>+</strong>, embaixo à direita, para criar o álbum e, dentro dele, em <em>Adicionar fotos</em> (dá para escolher várias de uma vez). O app reduz cada foto no celular antes de enviar, para gastar pouco espaço. A instituição de ensino pode ter até ${GALLERY_LIMIT} fotos: apague álbuns antigos quando chegar perto. Evite fotos de crianças em que elas apareçam de perto sem a autorização dos pais.</p>`
                : ''
            }`,
         ]]
@@ -1328,17 +1328,17 @@ function helpTopics() {
       ? [[
           'Pix',
           `<p>Em <a href="#/pix">Pix</a>, aponte a câmera do app do seu banco para o QR Code, ou toque em <em>Copiar código Pix</em> e cole em <em>Pix &gt; Copia e cola</em>. Se quiser, digite o valor antes: ele já vem preenchido no banco.</p>
-           <p>O dinheiro vai direto para a conta da igreja. O app não recebe, não processa e não guarda nada sobre a sua oferta. Confira o nome do recebedor no banco antes de confirmar.</p>`,
+           <p>O dinheiro vai direto para a conta da instituição de ensino. O app não recebe, não processa e não guarda nada sobre a sua oferta. Confira o nome do recebedor no banco antes de confirmar.</p>`,
         ]]
       : []),
     [
       'Meu cadastro e privacidade',
       `<p>Em <a href="#/perfil">Menu &gt; Meu cadastro</a> você corrige o nome, o telefone, a data de nascimento e a foto, e escolhe se os outros membros veem essas datas e o seu telefone. Para trocar o e-mail, fale com a secretaria.</p>
-       <p>Em <a href="#/meus-dados">Menu &gt; Meus dados</a> você baixa tudo o que o app guarda sobre você, sai desta igreja ou exclui a sua conta.</p>`,
+       <p>Em <a href="#/meus-dados">Menu &gt; Meus dados</a> você baixa tudo o que o app guarda sobre você, sai desta instituição de ensino ou exclui a sua conta.</p>`,
     ],
     [
-      'Participo de mais de uma igreja',
-      '<p>Cada igreja tem o seu endereço e o seu ícone no celular. Para ir de uma para outra, use <em>Menu &gt; Trocar de igreja</em>.</p>',
+      'Participo de mais de uma instituição de ensino',
+      '<p>Cada instituição de ensino tem o seu endereço e o seu ícone no celular. Para ir de uma para outra, use <em>Menu &gt; Trocar de instituição de ensino</em>.</p>',
     ],
     [
       'Problemas comuns',
@@ -1355,12 +1355,12 @@ function helpTopics() {
     [
       'O que cada papel faz',
       `<table class="help-table">
-         <tr><th>Administrador</th><td>Tudo da liderança, mais: configura a igreja, define os papéis, desliga contas e escreve a mensagem de aniversário.</td></tr>
+         <tr><th>Administrador</th><td>Tudo da liderança, mais: configura a instituição de ensino, define os papéis, desliga contas e escreve a mensagem de aniversário.</td></tr>
          <tr><th>Secretaria</th><td>Cadastra, edita, inativa e exclui membros; publica eventos e avisos.</td></tr>
          <tr><th>Líder</th><td>Cadastra, edita e inativa membros (não exclui); publica eventos e avisos.</td></tr>
          <tr><th>Membro</th><td>Vê a agenda, os avisos e os aniversariantes que autorizaram; edita os próprios dados.</td></tr>
        </table>
-       <p>Administrador, secretaria e líderes formam a liderança: veem o cadastro completo de todos e recebem o resumo dos aniversariantes. Use esse acesso só para cuidar da igreja.</p>`,
+       <p>Administrador, secretaria e líderes formam a liderança: veem o cadastro completo de todos e recebem o resumo dos aniversariantes. Use esse acesso só para cuidar da instituição de ensino.</p>`,
     ],
     [
       'Cadastrar membros',
@@ -1372,7 +1372,7 @@ function helpTopics() {
          <li><strong>No app:</strong> tudo certo.</li>
          <li><strong>Sem e-mail:</strong> não entra no app, mas aparece na lista de membros e nos aniversariantes.</li>
        </ul>
-       <p>Quem saiu da igreja pode ficar <em>Inativo</em>: some das listas e não acessa o app, mas o cadastro fica guardado. Para inativar, arraste a pessoa para a esquerda na lista (ou mude a <em>Situação</em> no cadastro dela); em <em>Inativos</em>, o mesmo gesto reativa.</p>`,
+       <p>Quem saiu da instituição de ensino pode ficar <em>Inativo</em>: some das listas e não acessa o app, mas o cadastro fica guardado. Para inativar, arraste a pessoa para a esquerda na lista (ou mude a <em>Situação</em> no cadastro dela); em <em>Inativos</em>, o mesmo gesto reativa.</p>`,
     ],
     [
       'Importar uma planilha de membros',
@@ -1383,7 +1383,7 @@ function helpTopics() {
       ? [[
           'Criar eventos e cultos',
           `<p>Na <a href="#/calendario">Agenda</a>, toque no dia do calendário e no botão <strong>+</strong>, embaixo à direita (ou no <strong>+</strong> da lista). Para os cultos fixos, marque <strong>Repetir toda semana</strong> (e, se quiser, até quando).</p>
-           <p>Em <strong>Marcar no mapa</strong>, busque o endereço ou toque no ponto exato: quem abrir o evento vê o mapa e tem os botões de rota pelo Google Maps e pelo Waze. O mesmo vale para o endereço da igreja.</p>
+           <p>Em <strong>Marcar no mapa</strong>, busque o endereço ou toque no ponto exato: quem abrir o evento vê o mapa e tem os botões de rota pelo Google Maps e pelo Waze. O mesmo vale para o endereço da instituição de ensino.</p>
            
            <p>Escolha o <strong>lembrete</strong>: os membros com notificação ativada recebem 1 hora, 2 horas, 3 horas ou 1 dia antes. Editar ou excluir um evento que se repete vale para todas as semanas.</p>`,
         ]]
@@ -1391,7 +1391,7 @@ function helpTopics() {
     ...(features('salas')
       ? [[
           'Salas das crianças',
-          `<p>Em <a href="#/salas">Menu &gt; Salas das crianças</a>, toque no <strong>+</strong> para criar a sala (ex.: Maternal, Kids) e escolha o <strong>tutor</strong>: um membro da igreja que usa o app. Ele passa a ver a sala em <em>Minhas salas</em>.</p>
+          `<p>Em <a href="#/salas">Menu &gt; Salas das crianças</a>, toque no <strong>+</strong> para criar a sala (ex.: Maternal, Kids) e escolha o <strong>tutor</strong>: um membro da instituição de ensino que usa o app. Ele passa a ver a sala em <em>Minhas salas</em>.</p>
            <p>Em <em>Todas as crianças</em>, toque na criança e escolha a sala. Os pais cadastram os filhos em <em>Meus filhos</em>; quem não usa o app pode ser cadastrado aqui, com o nome e o WhatsApp do responsável.</p>
            <p>Na sala, a liderança e o tutor marcam a presença de cada aula, escrevem as anotações do dia (os pais leem) e mandam avisos para os pais. Presenças, anotações e avisos são apagados depois de 12 meses.</p>`,
         ]]
@@ -1407,12 +1407,12 @@ function helpTopics() {
 
   const admins = [
     [
-      'Configurar a igreja',
-      `<p>Em <a href="#/config">Menu &gt; Configurar a igreja</a>:</p>
+      'Configurar a instituição de ensino',
+      `<p>Em <a href="#/config">Menu &gt; Configurar a instituição de ensino</a>:</p>
        <ul class="bullets">
          <li><strong>Aparência:</strong> nome, nome curto (o que aparece embaixo do ícone), logo e cores. Logo em PNG com fundo transparente fica melhor; escolha o fundo do ícone. Se a cor for clara demais, o app avisa.</li>
-         <li><strong>Textos e redes sociais:</strong> boas-vindas, sobre a igreja, endereço e links.</li>
-         <li><strong>Pix:</strong> o tipo e a chave Pix da igreja e o nome do recebedor. Prefira o CNPJ ou uma chave aleatória: a chave fica visível para qualquer pessoa.</li>
+         <li><strong>Textos e redes sociais:</strong> boas-vindas, sobre a instituição de ensino, endereço e links.</li>
+         <li><strong>Pix:</strong> o tipo e a chave Pix da instituição de ensino e o nome do recebedor. Prefira o CNPJ ou uma chave aleatória: a chave fica visível para qualquer pessoa.</li>
          <li><strong>Funcionalidades:</strong> ligue ou desligue os aniversários, a agenda e o calendário, os avisos, Meus filhos e as salas das crianças, a carteirinha digital, a galeria de fotos e o Pix.</li>
          <li><strong>Privacidade:</strong> o e-mail para pedidos sobre dados pessoais e, se quiser, um complemento da política.</li>
        </ul>
@@ -1429,13 +1429,13 @@ function helpTopics() {
     [
       'Papéis, contas e exclusões',
       `<ul class="bullets">
-         <li>Para mudar o papel de alguém, abra a ficha em <em>Membros</em> e escolha o papel. A igreja precisa ter sempre pelo menos um administrador.</li>
+         <li>Para mudar o papel de alguém, abra a ficha em <em>Membros</em> e escolha o papel. A instituição de ensino precisa ter sempre pelo menos um administrador.</li>
          <li>Se a pessoa errada entrou com um e-mail, use <em>Desligar a conta do app</em> na ficha. Depois você pode corrigir o e-mail.</li>
          <li><em>Excluir cadastro</em> apaga os dados e a foto de vez (administrador e secretaria).</li>
        </ul>`,
     ],
     [
-      'Divulgar o app para a igreja',
+      'Divulgar o app para a instituição de ensino',
       `<p>Mande este endereço pelo WhatsApp ou mostre no telão. Cada pessoa entra com o e-mail que a secretaria cadastrou.</p>
        <div class="copy-row"><code id="app-url">${esc(PAGE_URL)}</code><button class="btn small" id="copy-url" type="button">Copiar</button></div>`,
     ],
@@ -1464,8 +1464,8 @@ async function viewHelp() {
         ${g.items.map(([title, body]) => `<details class="help-item"><summary>${esc(title)}</summary><div class="help-body">${body}</div></details>`).join('')}`,
         )
         .join('')}
-      ${state.platformAdmin ? `<p class="hint">Administrador da plataforma: novas igrejas são criadas em <a href="${esc(ROOT_URL)}#/plataforma">Plataforma</a>.</p>` : ''}
-      <p class="hint">Ainda com dúvida? Fale com a secretaria da igreja.</p>
+      ${state.platformAdmin ? `<p class="hint">Administrador da plataforma: novas instituições de ensino são criadas em <a href="${esc(ROOT_URL)}#/plataforma">Plataforma</a>.</p>` : ''}
+      <p class="hint">Ainda com dúvida? Fale com a secretaria da instituição de ensino.</p>
     </div>`;
 
   const installBox = document.getElementById('help-install');
@@ -1491,7 +1491,7 @@ async function viewHelp() {
   });
 }
 
-// Sem nenhuma igreja, este aparelho não tem por que continuar recebendo notificações.
+// Sem nenhuma instituição de ensino, este aparelho não tem por que continuar recebendo notificações.
 async function disablePushIfNoChurches() {
   await loadMemberships();
   if (!state.memberships.length) await disablePush(sb).catch(() => {});
@@ -1543,7 +1543,7 @@ async function viewProfile(ctx) {
       ${specialDateFields(m)}
       <fieldset class="card">
         <legend>O que os outros membros veem</legend>
-        <p class="hint">A liderança da igreja sempre vê os seus dados. Os outros membros veem só o seu nome, a não ser que você autorize:</p>
+        <p class="hint">A liderança da instituição de ensino sempre vê os seus dados. Os outros membros veem só o seu nome, a não ser que você autorize:</p>
         <label class="check"><input type="checkbox" name="show_birthday" ${m.show_birthday ? 'checked' : ''}> Meu aniversário (dia e mês, nunca o ano)</label>
         ${
           featureOn('datas_especiais')
@@ -1560,7 +1560,7 @@ async function viewProfile(ctx) {
           : ''
       }
       <button class="btn primary big">Salvar</button>
-      <p class="hint">Para trocar o e-mail, fale com a secretaria da igreja.</p>
+      <p class="hint">Para trocar o e-mail, fale com a secretaria da instituição de ensino.</p>
     </form>`;
   const form = document.getElementById('profile');
   photoLater(ctx, form, m.name, m.photo_path);
@@ -1634,14 +1634,14 @@ async function signedPhotos(paths) {
 
 // Lista de membros da última abertura da tela, em memória (some ao fechar o app).
 // Mostra na hora ao voltar para a lista; o banco confirma em seguida.
-const membersCache = new Map(); // igreja -> membros
+const membersCache = new Map(); // instituição de ensino -> membros
 const forgetMembers = () => {
   membersCache.delete(state.church?.id);
   membersLoading.delete(state.church?.id);
 };
 
 // Uma busca por vez: quem chega enquanto ela está a caminho aproveita a mesma resposta.
-const membersLoading = new Map(); // igreja -> busca em andamento
+const membersLoading = new Map(); // instituição de ensino -> busca em andamento
 function fetchMembers(churchId) {
   if (!membersLoading.has(churchId)) {
     const p = (async () => {
@@ -1784,7 +1784,7 @@ function bindPhotoField(form, name) {
 function requireLeader(next) {
   if (!requireLogin(next)) return false;
   if (isLeaderRole(myRole())) return true;
-  $view.innerHTML = `<div class="empty"><h2>Só para a liderança</h2><p>A lista de membros fica com a secretaria, os líderes e o administrador da igreja.</p><a class="btn" href="#/">Voltar</a></div>`;
+  $view.innerHTML = `<div class="empty"><h2>Só para a liderança</h2><p>A lista de membros fica com a secretaria, os líderes e o administrador da instituição de ensino.</p><a class="btn" href="#/">Voltar</a></div>`;
   return false;
 }
 
@@ -1961,7 +1961,7 @@ async function viewMemberForm(ctx, id) {
       <label>Data de nascimento<input name="birth_date" type="date" min="1900-01-01" value="${esc(m.birth_date || '')}"></label>
       ${specialDateFields(m)}
       ${featureOn('carteirinha') ? `<label>Membro desde (opcional)<input name="member_since" type="date" min="1900-01-02" value="${esc(m.member_since || '')}"><small class="hint">Aparece na carteirinha digital.</small></label>` : ''}
-      <label>Papel na igreja
+      <label>Papel na instituição de ensino
         <select name="role" ${admin ? '' : 'disabled'}>
           ${Object.entries(ROLES).map(([k, label]) => `<option value="${k}" ${m.role === k ? 'selected' : ''}>${label}</option>`).join('')}
         </select>
@@ -1975,7 +1975,7 @@ async function viewMemberForm(ctx, id) {
       }
       ${
         isNew
-          ? `<label class="check"><input type="checkbox" name="consent" required> A pessoa concordou em ter estes dados no app da igreja.</label>`
+          ? `<label class="check"><input type="checkbox" name="consent" required> A pessoa concordou em ter estes dados no app da instituição de ensino.</label>`
           : `<label>Situação
               <select name="status">
                 <option value="ativo" ${m.status === 'ativo' ? 'selected' : ''}>Ativo</option>
@@ -2144,7 +2144,7 @@ async function viewImport(ctx) {
         <h2>${ok.length} ${ok.length === 1 ? 'pessoa pronta' : 'pessoas prontas'} para importar</h2>
         ${skipped.length ? `<p class="hint">${skipped.length} pulada(s): já cadastrada(s) ou com e-mail repetido.</p>` : ''}
         ${bad.length ? `<p class="hint warn">${bad.length} linha(s) com erro não serão importadas. Corrija na planilha e importe de novo, se quiser.</p>` : ''}
-        ${tooMany ? `<p class="hint warn">A igreja pode cadastrar mais ${Math.max(room, 0)} pessoa(s) no plano atual (e até ${IMPORT_MAX} por planilha).</p>` : ''}
+        ${tooMany ? `<p class="hint warn">A instituição de ensino pode cadastrar mais ${Math.max(room, 0)} pessoa(s) no plano atual (e até ${IMPORT_MAX} por planilha).</p>` : ''}
         <div class="table-wrap">
           <table class="preview-table">
             <thead><tr><th>Linha</th><th>Situação</th><th>Nome</th><th>E-mail</th><th>Telefone</th><th>Nascimento</th>${special ? '<th>Casamento</th><th>Batismo</th>' : ''}</tr></thead>
@@ -2168,7 +2168,7 @@ async function viewImport(ctx) {
         ${
           ok.length && !tooMany
             ? `<form id="do-import" class="form">
-                <label class="check"><input type="checkbox" name="consent" required> As pessoas da planilha concordaram em ter os dados no app da igreja.</label>
+                <label class="check"><input type="checkbox" name="consent" required> As pessoas da planilha concordaram em ter os dados no app da instituição de ensino.</label>
                 <button class="btn primary big">Importar ${ok.length} ${ok.length === 1 ? 'pessoa' : 'pessoas'}</button>
               </form>`
             : ''
@@ -2210,12 +2210,12 @@ async function viewImport(ctx) {
 }
 
 // ---------------------------------------------------------------------
-// Configurar a igreja (só o administrador): aparência, textos, funcionalidades, privacidade
+// Configurar a instituição de ensino (só o administrador): aparência, textos, funcionalidades, privacidade
 // ---------------------------------------------------------------------
 async function viewSettings(ctx) {
   if (!requireLogin('/config')) return;
   if (myRole() !== 'admin') {
-    $view.innerHTML = `<div class="empty"><h2>Só para o administrador</h2><p>Peça ao administrador da igreja para mudar a configuração.</p><a class="btn" href="#/">Voltar</a></div>`;
+    $view.innerHTML = `<div class="empty"><h2>Só para o administrador</h2><p>Peça ao administrador da instituição de ensino para mudar a configuração.</p><a class="btn" href="#/">Voltar</a></div>`;
     return;
   }
   const c = state.church;
@@ -2236,14 +2236,14 @@ async function viewSettings(ctx) {
 
   $view.innerHTML = `
     <form id="settings" class="form page">
-      <h1>Configurar a igreja</h1>
+      <h1>Configurar a instituição de ensino</h1>
       ${messageLinks()}
 
       <fieldset class="card">
         <legend>Aparência</legend>
-        <label>Nome da igreja<input name="name" required minlength="2" maxlength="80" value="${esc(c.name)}"></label>
+        <label>Nome da instituição de ensino<input name="name" required minlength="2" maxlength="80" value="${esc(c.name)}"></label>
         <label>Nome curto (embaixo do ícone no celular)<input name="short_name" maxlength="20" value="${esc(c.short_name || '')}" placeholder="${esc(c.name.slice(0, 20))}"></label>
-        <p class="hint">É o nome que aparece embaixo do ícone do app instalado. Deixe em branco para usar o começo do nome da igreja.</p>
+        <p class="hint">É o nome que aparece embaixo do ícone do app instalado. Deixe em branco para usar o começo do nome da instituição de ensino.</p>
         <div class="logo-picker">
           <div class="icon-with-name">
             <div class="icon-preview" id="icon-preview" style="background:${esc(c.icon_background)}">
@@ -2264,7 +2264,7 @@ async function viewSettings(ctx) {
         <fieldset>
           <legend>Fundo do app no tema escuro</legend>
           <label class="check"><input type="radio" name="dark_theme" value="preto" ${c.dark_theme !== 'principal' ? 'checked' : ''}> Preto</label>
-          <label class="check"><input type="radio" name="dark_theme" value="principal" ${c.dark_theme === 'principal' ? 'checked' : ''}> Cor principal da igreja
+          <label class="check"><input type="radio" name="dark_theme" value="principal" ${c.dark_theme === 'principal' ? 'checked' : ''}> Cor principal da instituição de ensino
             <small class="hint">Os cartões ficam um pouco mais claros e os botões e o + usam a cor principal clareada, para não sumirem no fundo. Cor clara demais é escurecida no fundo, para os textos ficarem legíveis.</small></label>
         </fieldset>
       </fieldset>
@@ -2272,11 +2272,11 @@ async function viewSettings(ctx) {
       <fieldset class="card">
         <legend>Textos</legend>
         <label>Mensagem de boas-vindas<textarea name="welcome_text" rows="2" maxlength="500">${esc(c.welcome_text || '')}</textarea></label>
-        <label>Sobre a igreja<textarea name="about_text" rows="4" maxlength="2000" placeholder="Horários dos cultos, história, pastores…">${esc(c.about_text || '')}</textarea></label>
+        <label>Sobre a instituição de ensino<textarea name="about_text" rows="4" maxlength="2000" placeholder="Horários dos cultos, história, pastores…">${esc(c.about_text || '')}</textarea></label>
         <label>Endereço<input name="address" maxlength="200" value="${esc(c.address || '')}"></label>
         <label>Cidade<input name="city" maxlength="80" value="${esc(c.city || '')}"></label>
         ${pinField(c)}
-        <small class="hint">Com o alfinete no mapa, a página da igreja mostra o mapa e a rota pelo Google Maps e pelo Waze.</small>
+        <small class="hint">Com o alfinete no mapa, a página da instituição de ensino mostra o mapa e a rota pelo Google Maps e pelo Waze.</small>
       </fieldset>
 
       <fieldset class="card">
@@ -2286,7 +2286,7 @@ async function viewSettings(ctx) {
 
       <fieldset class="card">
         <legend>${icon.pix} Pix</legend>
-        <p class="hint">Com a funcionalidade ligada, a tela <em>Pix</em> mostra o QR Code e a chave da igreja. O dinheiro vai direto para a conta da igreja: o app não recebe nem registra pagamentos.</p>
+        <p class="hint">Com a funcionalidade ligada, a tela <em>Pix</em> mostra o QR Code e a chave da instituição de ensino. O dinheiro vai direto para a conta da igreja: o app não recebe nem registra pagamentos.</p>
         <div class="pix-row">
           <label>Tipo de chave
             <select name="pix_type">
@@ -2296,7 +2296,7 @@ async function viewSettings(ctx) {
           <label>Chave Pix<input name="pix_key" maxlength="120" autocomplete="off" value="${esc(c.pix_key ? formatPixKey(c.pix_key) : '')}"></label>
         </div>
         <label>Nome do recebedor (como aparece no banco)<input name="pix_name" maxlength="25" value="${esc(c.pix_name || '')}" placeholder="${esc(c.name.slice(0, 25))}"></label>
-        <p class="hint">A chave fica visível para qualquer pessoa que abrir a página da igreja, mesmo sem entrar. Prefira o CNPJ ou uma chave aleatória da conta da igreja.</p>
+        <p class="hint">A chave fica visível para qualquer pessoa que abrir a página da instituição de ensino, mesmo sem entrar. Prefira o CNPJ ou uma chave aleatória da conta da instituição de ensino.</p>
         <div class="notice warn-box" id="pix-cpf-warning" hidden><p>Se a chave for um <strong>CPF</strong>, ele fica público. Use o CPF de uma pessoa só se ela concordar.</p></div>
       </fieldset>
 
@@ -2314,7 +2314,7 @@ async function viewSettings(ctx) {
       <fieldset class="card">
         <legend>Privacidade</legend>
         <label>E-mail para pedidos sobre dados pessoais<input name="privacy_email" type="email" maxlength="160" value="${esc(c.privacy_email || '')}"></label>
-        <label>Complemento da política de privacidade (opcional)<textarea name="privacy_text" rows="4" maxlength="8000" placeholder="Quem cuida dos dados na igreja, por quanto tempo eles ficam guardados…">${esc(c.privacy_text || '')}</textarea></label>
+        <label>Complemento da política de privacidade (opcional)<textarea name="privacy_text" rows="4" maxlength="8000" placeholder="Quem cuida dos dados na instituição de ensino, por quanto tempo eles ficam guardados…">${esc(c.privacy_text || '')}</textarea></label>
       </fieldset>
 
       <button class="btn primary big">Salvar</button>
@@ -2329,7 +2329,7 @@ async function viewSettings(ctx) {
   colorWarn();
   form.primary_color.addEventListener('input', colorWarn);
   form.icon_background.addEventListener('input', () => (document.getElementById('icon-preview').style.background = form.icon_background.value));
-  // Nome embaixo do ícone no celular: o nome curto, ou o começo do nome da igreja.
+  // Nome embaixo do ícone no celular: o nome curto, ou o começo do nome da instituição de ensino.
   const iconName = () => {
     const name = form.name.value.trim();
     document.getElementById('icon-name').textContent = form.short_name.value.trim() || name.slice(0, 20);
@@ -2366,7 +2366,7 @@ async function viewSettings(ctx) {
       const pixRaw = form.pix_key.value.trim();
       const pix_key = pixRaw ? normalizePixKey(form.pix_type.value, pixRaw) : null;
       if (pixRaw && !pix_key) throw new Error(`Chave Pix inválida para o tipo "${PIX_TYPES[form.pix_type.value]}".`);
-      if (features.pix && !pix_key) throw new Error('Para ligar o Pix, preencha a chave Pix da igreja.');
+      if (features.pix && !pix_key) throw new Error('Para ligar o Pix, preencha a chave Pix da instituição de ensino.');
 
       const patch = {
         name: form.name.value.trim(),
@@ -2387,7 +2387,7 @@ async function viewSettings(ctx) {
         privacy_text: form.privacy_text.value.trim() || null,
       };
 
-      // Logo nova ou fundo do ícone diferente: gera os ícones do app de novo. Igreja que ainda não
+      // Logo nova ou fundo do ícone diferente: gera os ícones do app de novo. Instituição de ensino que ainda não
       // tem o ícone da barra de notificações (criado depois): gera a partir da logo que já existe e
       // grava a logo de novo, para o site ser publicado com o ícone novo.
       let source = logoFile;
@@ -2452,13 +2452,13 @@ async function viewSettings(ctx) {
 }
 
 // ---------------------------------------------------------------------
-// Pix: QR Code e chave Pix da igreja. Aberta a todos, como a chave
-// na tabela de igrejas. O app não recebe nem registra pagamentos.
+// Pix: QR Code e chave Pix da instituição de ensino. Aberta a todos, como a chave
+// na tabela de instituições de ensino. O app não recebe nem registra pagamentos.
 // ---------------------------------------------------------------------
 async function viewOffer() {
   const c = state.church;
   if (!offerReady()) {
-    $view.innerHTML = `<div class="empty"><h2>Pix</h2><p>A igreja ainda não informou uma chave Pix.</p><a class="btn" href="#/">Voltar</a></div>`;
+    $view.innerHTML = `<div class="empty"><h2>Pix</h2><p>A instituição de ensino ainda não informou uma chave Pix.</p><a class="btn" href="#/">Voltar</a></div>`;
     return;
   }
   const receiver = c.pix_name || c.name;
@@ -2476,7 +2476,7 @@ async function viewOffer() {
         <button class="btn small" id="copy-key" type="button">Copiar chave</button>
         <p class="hint">Recebedor: <strong>${esc(receiver)}</strong>. Confira o nome no app do banco antes de confirmar.</p>
       </section>
-      <p class="hint">O dinheiro vai direto para a conta da igreja. O app não recebe, não processa e não registra nenhum pagamento.</p>
+      <p class="hint">O dinheiro vai direto para a conta da instituição de ensino. O app não recebe, não processa e não registra nenhum pagamento.</p>
     </div>`;
 
   let code = '';
@@ -2551,7 +2551,7 @@ function requireMemberFeature(next, key) {
     return false;
   }
   if (featureOn(key)) return true;
-  $view.innerHTML = `<div class="empty"><h2>Desligado nesta igreja</h2><a class="btn" href="#/">Voltar</a></div>`;
+  $view.innerHTML = `<div class="empty"><h2>Desligado nesta instituição de ensino</h2><a class="btn" href="#/">Voltar</a></div>`;
   return false;
 }
 
@@ -2667,7 +2667,7 @@ function drawAgenda(all) {
 }
 
 // ---------------------------------------------------------------------
-// Calendário: a mesma agenda da igreja vista por mês ou por dia (como o Google Agenda).
+// Calendário: a mesma agenda da instituição de ensino vista por mês ou por dia (como o Google Agenda).
 // A liderança adiciona eventos tocando no dia; os aniversariantes (quem autorizou) aparecem com 🎂.
 // ---------------------------------------------------------------------
 const WEEK_INITIALS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
@@ -3399,7 +3399,7 @@ async function viewChildForm(ctx, id) {
         id
           ? ''
           : `<label class="check"><input type="checkbox" name="consent" required> ${
-              team ? 'O responsável autorizou a igreja a guardar estes dados.' : 'Autorizo a igreja a guardar estes dados do meu filho para as salas das crianças.'
+              team ? 'O responsável autorizou a instituição de ensino a guardar estes dados.' : 'Autorizo a instituição de ensino a guardar estes dados do meu filho para as salas das crianças.'
             }
             <small class="hint">Só o responsável, o tutor da sala e a liderança veem. As presenças e as anotações são apagadas em 12 meses.</small></label>`
       }
@@ -3820,7 +3820,7 @@ function drawCard(ctx, m, photos) {
         <button class="btn primary" id="card-save">${icon.upload} Salvar imagem</button>
         <button class="btn" id="card-rotate">Gerar novo QR Code</button>
       </div>
-      <p class="hint">Quem ler o QR Code vê se você é membro ativo da igreja, com o nome, o papel e "membro desde". A foto, o telefone e o e-mail não aparecem. Se alguém copiou a sua carteirinha, gere um novo QR Code: o anterior deixa de valer.</p>
+      <p class="hint">Quem ler o QR Code vê se você é membro ativo da instituição de ensino, com o nome, o papel e "membro desde". A foto, o telefone e o e-mail não aparecem. Se alguém copiou a sua carteirinha, gere um novo QR Code: o anterior deixa de valer.</p>
       ${m.member_since ? '' : '<p class="hint">"Membro desde" é preenchido pela secretaria ou pela liderança.</p>'}
     </div>`;
   qrSvg(cardUrl(m.card_token))
@@ -3935,7 +3935,7 @@ async function viewCardVerify(ctx, token) {
       ${
         !r
           ? `<div class="verify-result bad"><p class="verify-icon">❌</p><h1>Carteirinha não reconhecida</h1>
-               <p>O QR Code pode ter sido trocado por um novo, ou a igreja não usa mais a carteirinha digital.</p></div>`
+               <p>O QR Code pode ter sido trocado por um novo, ou a instituição de ensino não usa mais a carteirinha digital.</p></div>`
           : `<div class="verify-result ${r.active ? 'ok' : 'warn'}">
                <img src="${esc(r.logo_url || 'icons/icon-192.png')}" alt="" width="64" height="64">
                <p class="verify-icon">${r.active ? '✅' : '⚠️'}</p>
@@ -4033,7 +4033,7 @@ function drawGallery(albums, urls) {
               .join('')}</div>`
           : `<div class="empty"><p>Nenhum álbum ainda.${team ? ' Toque no <strong>+</strong> para criar o primeiro.' : ''}</p></div>`
       }
-      <p class="hint">As fotos são vistas só por quem é da igreja. Se você aparece numa foto e prefere que ela saia, abra a foto e toque em <em>Pedir para tirar esta foto</em>.</p>
+      <p class="hint">As fotos são vistas só por quem é da instituição de ensino. Se você aparece numa foto e prefere que ela saia, abra a foto e toque em <em>Pedir para tirar esta foto</em>.</p>
       ${team ? fab('#/galeria/novo', 'Novo álbum') : ''}
     </div>`;
 }
@@ -4373,7 +4373,7 @@ function swipeLeft(list, onSwipe, onEmpty) {
 }
 
 // ---------------------------------------------------------------------
-// Aniversários: cartão da semana, aniversariantes do mês, mensagem da igreja, notificações
+// Aniversários: cartão da semana, aniversariantes do mês, mensagem da instituição de ensino, notificações
 // ---------------------------------------------------------------------
 const MONTHS = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const isoLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -4463,7 +4463,7 @@ async function viewBirthdays(ctx) {
   await screenShowWithPhotos(ctx, `mes:${y}-${m}`, load, (rows) => rows.map((r) => r.photo_path), (rows, minis) => drawBirthdays(rows, minis, y, m));
 }
 
-// Folha do mês para imprimir (mural da igreja): só nomes, sem fotos; mesmo guardado da lista.
+// Folha do mês para imprimir (mural da instituição de ensino): só nomes, sem fotos; mesmo guardado da lista.
 async function viewBirthdaysSheet(ctx) {
   if (!requireLogin('/aniversariantes')) return;
   if (!isActiveMember()) return navigate('/');
@@ -4677,7 +4677,7 @@ async function viewNotifications(ctx) {
         ? notifList(items)
         : `<div class="empty notif-empty">${icon.bell}
           <h2>Tudo em dia!</h2>
-          <p>${filter ? `Nenhuma notificação de ${NOTIF_GROUPS[filter].label.toLowerCase()}.` : 'Avisos, lembretes da agenda e as mensagens da igreja aparecem aqui.'}</p>
+          <p>${filter ? `Nenhuma notificação de ${NOTIF_GROUPS[filter].label.toLowerCase()}.` : 'Avisos, lembretes da agenda e as mensagens da instituição de ensino aparecem aqui.'}</p>
         </div>`;
     moreBtn.hidden = !more;
     clearBtn.hidden = !items?.some((n) => !n.unread);
@@ -4707,7 +4707,7 @@ async function viewNotifications(ctx) {
     document.getElementById('push-offer').innerHTML =
       support === 'ok' && !blocked && !active
         ? `<div class="notice push-invite">${icon.bell}
-            <span><strong>Receba no celular</strong><small>Avisos e lembretes da igreja, mesmo com o app fechado.</small></span>
+            <span><strong>Receba no celular</strong><small>Avisos e lembretes da instituição de ensino, mesmo com o app fechado.</small></span>
             <button class="btn primary small" id="push-on">Ativar</button>
           </div>`
         : support === 'ios-instalar'
@@ -4809,7 +4809,7 @@ async function sendTestPush(btn) {
   }
 }
 
-async function pushInvite(el, { title = 'Receba as mensagens da igreja no celular', note = 'Como a mensagem no dia do seu aniversário.' } = {}) {
+async function pushInvite(el, { title = 'Receba as mensagens da instituição de ensino no celular', note = 'Como a mensagem no dia do seu aniversário.' } = {}) {
   if (!el || !isActiveMember() || pushSupport() !== 'ok' || Notification.permission !== 'default' || (await pushActive())) return;
   try {
     if (Date.now() - Number(localStorage.getItem('push-invite-dismissed') || 0) < 30 * 864e5) return;
@@ -4876,7 +4876,7 @@ async function viewMessageSettings(ctx, kind) {
   const info = MESSAGE_KINDS[kind];
   const screen = MESSAGE_SCREEN[kind];
   if (!featureOn(info.feature)) {
-    $view.innerHTML = `<div class="empty"><h2>${esc(info.menu)}</h2><p>Ligue a funcionalidade em Configurar a igreja.</p><a class="btn" href="#/config">Configurar a igreja</a></div>`;
+    $view.innerHTML = `<div class="empty"><h2>${esc(info.menu)}</h2><p>Ligue a funcionalidade em Configurar a instituição de ensino.</p><a class="btn" href="#/config">Configurar a instituição de ensino</a></div>`;
     return;
   }
   const loadTemplates = async () => {
@@ -5032,7 +5032,7 @@ async function viewMessageSettings(ctx, kind) {
 // ---------------------------------------------------------------------
 async function loadChurch() {
   // Pedido simples, igual ao preload da página: chega junto com o código do app em vez de depois dele.
-  // Igreja desativada (só o administrador da plataforma vê) ou falha: busca pelo cliente, com a sessão.
+  // Instituição de ensino desativada (só o administrador da plataforma vê) ou falha: busca pelo cliente, com a sessão.
   try {
     const res = await fetch(churchRestUrl(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, SLUG));
     const [church] = res.ok ? await res.json() : [];
@@ -5043,7 +5043,7 @@ async function loadChurch() {
   return data;
 }
 
-// Abertura rápida: guarda no aparelho a igreja e os cadastros da última abertura. Na próxima,
+// Abertura rápida: guarda no aparelho a instituição de ensino e os cadastros da última abertura. Na próxima,
 // a tela aparece na hora com eles, e o banco confirma em segundo plano (se algo mudou, redesenha).
 // Só vale para a mesma conta que está logada neste aparelho; as permissões continuam no banco.
 const BOOT_KEY = 'abertura-rapida';
@@ -5110,7 +5110,7 @@ async function boot() {
     state.church = null;
     renderTabbar('/');
     applyBranding();
-    $view.innerHTML = `<div class="empty"><h2>Igreja não encontrada</h2><p>Confira o endereço com a liderança da sua igreja.</p><a class="btn" href="${esc(ROOT_URL)}">Ir para o início</a></div>`;
+    $view.innerHTML = `<div class="empty"><h2>Instituição de ensino não encontrada</h2><p>Confira o endereço com a liderança da sua instituição de ensino.</p><a class="btn" href="${esc(ROOT_URL)}">Ir para o início</a></div>`;
     return;
   }
   state.church = church;
@@ -5140,12 +5140,12 @@ async function boot() {
     window.addEventListener('hashchange', render);
     render();
   } else if (bootSnapshot() !== quick) {
-    render(); // a igreja ou os cadastros mudaram desde a última abertura
+    render(); // a instituição de ensino ou os cadastros mudaram desde a última abertura
   }
 }
 
-// Nas páginas das igrejas o <base> aponta para a raiz do site, e o navegador resolveria
-// href="#/..." contra ela (saindo da igreja). Os links internos trocam só o "#" da página atual.
+// Nas páginas das instituições de ensino o <base> aponta para a raiz do site, e o navegador resolveria
+// href="#/..." contra ela (saindo da instituição de ensino). Os links internos trocam só o "#" da página atual.
 document.addEventListener('click', (e) => {
   const a = e.target.closest('a[href^="#"]');
   if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -5159,8 +5159,8 @@ document.addEventListener('click', (e) => {
   if (open && !open.contains(e.target)) open.open = false;
 });
 
-// Cada igreja tem o seu service worker, com o mesmo endereço do app instalado dela (i/<igreja>/):
-// assim o Android mostra os avisos pelo app da igreja, como no Desapega. Com o da raiz do site,
+// Cada instituição de ensino tem o seu service worker, com o mesmo endereço do app instalado dela (i/<igreja>/):
+// assim o Android mostra os avisos pelo app da instituição de ensino, como no Desapega. Com o da raiz do site,
 // o aviso ia para o Chrome e sumia em silêncio quando o Chrome não tinha permissão no celular.
 const SW_SCOPE = SLUG ? PAGE_URL.replace(/\/?$/, '/') : ROOT_URL;
 if ('serviceWorker' in navigator) navigator.serviceWorker.register(new URL('sw.js', ROOT_URL).href, { scope: SW_SCOPE }).catch(() => {});

@@ -1,5 +1,5 @@
-// Convite para "Adicionar à tela inicial", com o nome e a logo da igreja.
-// Aparece depois que a pessoa entra na igreja; no iPhone, mostra um tutorial.
+// Convite para "Adicionar à tela inicial", com o nome e a logo da instituição de ensino.
+// Aparece depois que a pessoa entra na instituição de ensino; no iPhone, mostra um tutorial.
 import { esc } from './util.js';
 
 let deferredPrompt = null;
@@ -24,15 +24,15 @@ function write(key, value) {
   } catch {}
 }
 
-// A página da igreja vem com a versão do ícone com que foi publicada (scripts/build-site.mjs).
+// A página da instituição de ensino vem com a versão do ícone com que foi publicada (scripts/build-site.mjs).
 // Se o administrador trocou o ícone depois, o celular instalaria com o antigo: espera a próxima
-// publicação (o GitHub confere a cada 10 minutos). Igreja nova, ainda sem pasta, também espera.
+// publicação (o GitHub confere a cada 10 minutos). Instituição de ensino nova, ainda sem pasta, também espera.
 export function iconReady(church) {
   const built = Number(document.querySelector('meta[name="icone-versao"]')?.content || 0);
   return !!church && built >= (church.branding_version || 1);
 }
 export const ICON_PREPARING =
-  'O ícone novo da igreja está sendo preparado. Em até 15 minutos fica pronto para instalar: depois disso, abra esta página de novo.';
+  'O ícone novo da instituição de ensino está sendo preparado. Em até 15 minutos fica pronto para instalar: depois disso, abra esta página de novo.';
 
 // Para a tela de Ajuda: 'instalado' | 'android' (o navegador oferece instalar) | 'iphone' | 'manual'.
 export function installState() {

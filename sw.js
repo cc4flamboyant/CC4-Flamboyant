@@ -1,13 +1,13 @@
 // Service worker: deixa o app abrir rápido e funcionar com internet ruim.
 // Arquivos do app (SHELL): saem do aparelho na hora. Cada versão publicada tem um cache próprio,
 // baixado inteiro quando este arquivo muda, então nunca se misturam arquivos de versões diferentes.
-// Páginas das igrejas e ícones: do aparelho na hora, atualizados em segundo plano para a próxima vez.
+// Páginas das instituições de ensino e ícones: do aparelho na hora, atualizados em segundo plano para a próxima vez.
 // Dados do Supabase: sempre da rede.
 // O build (scripts/build-site.mjs) acrescenta ao nome do cache um código do conteúdo do app:
 // qualquer mudança de código gera uma versão nova sozinha.
-const CACHE = 'cc4-v12';
+const CACHE = 'cc4-v13';
 const ANDROID = /android/i.test(self.navigator.userAgent);
-// Service worker de uma igreja (escopo i/<igreja>/, o mesmo do app instalado) ou da raiz do site.
+// Service worker de uma instituição de ensino (escopo i/<igreja>/, o mesmo do app instalado) ou da raiz do site.
 const CHURCH_SCOPE = /\/i\/[a-z0-9-]+\/$/.test(new URL(self.registration.scope).pathname);
 const SHELL = [
   './',
@@ -72,7 +72,7 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Resto (página da igreja, manifest, ícones): mostra o que tem e busca a versão nova para a próxima vez.
+  // Resto (página da instituição de ensino, manifest, ícones): mostra o que tem e busca a versão nova para a próxima vez.
   const fresh = fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' }).then((res) => {
     if (res.ok) {
       const copy = res.clone();
@@ -108,9 +108,9 @@ self.addEventListener('push', (e) => {
       return self.registration.showNotification(msg.title || 'CC4', {
         body: msg.body || '',
         // No Android o ícone grande aparece à direita: sem imagem, o Chrome desenha uma bola com a letra
-        // do site ("I"); uma imagem transparente não mostra nada (como no Desapega). O ícone da igreja já aparece à esquerda.
+        // do site ("I"); uma imagem transparente não mostra nada (como no Desapega). O ícone da instituição de ensino já aparece à esquerda.
         icon: ANDROID ? 'icons/vazio.png' : msg.icon || 'icons/icon-192.png',
-        // Ícone da barra de notificações (ao lado do relógio): o da igreja, gerado da logo e publicado
+        // Ícone da barra de notificações (ao lado do relógio): o da instituição de ensino, gerado da logo e publicado
         // em i/<igreja>/; na raiz do site, o padrão.
         badge: CHURCH_SCOPE ? new URL('badge-96.png', self.registration.scope).href : 'icons/badge-96.png',
         image: msg.image,

@@ -1,6 +1,6 @@
 // Tema escolhido neste aparelho (claro ou escuro), aplicado antes de a página aparecer, para
 // não piscar. Sem escolha, o app segue o tema do celular. A troca fica no botão do topo (js/app.js).
-// Igreja com o fundo do tema escuro na cor principal: as cores guardadas na última abertura
+// Instituição de ensino com o fundo do tema escuro na cor principal: as cores guardadas na última abertura
 // (js/app.js, applyBranding) também entram antes, para não piscar o fundo preto.
 (function () {
   try {

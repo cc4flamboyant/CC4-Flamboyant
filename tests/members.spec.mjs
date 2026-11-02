@@ -63,7 +63,7 @@ test('a líder cadastra e edita um membro, mas não muda o papel nem exclui', as
   await page.getByLabel('E-mail').fill(EMAIL);
   await page.getByLabel('Telefone com DDD').fill('(61) 98888-7777');
   await page.getByLabel('Data de nascimento').fill('1990-05-10');
-  await expect(page.getByLabel('Papel na igreja')).toBeDisabled();
+  await expect(page.getByLabel('Papel na instituição de ensino')).toBeDisabled();
   await page.getByLabel('A pessoa concordou').check();
   await page.getByRole('button', { name: 'Cadastrar' }).click();
 

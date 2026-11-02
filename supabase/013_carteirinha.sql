@@ -26,7 +26,7 @@ returns trigger language plpgsql security definer set search_path = '' as $$
 begin
   if new.member_since is distinct from old.member_since and auth.uid() is not null
      and not public.is_leader(new.church_id) then
-    raise exception 'Só a liderança da igreja muda "membro desde".' using errcode = '42501';
+    raise exception 'Só a liderança da instituição de ensino muda "membro desde".' using errcode = '42501';
   end if;
   return new;
 end $$;

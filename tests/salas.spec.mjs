@@ -45,7 +45,7 @@ test('o responsável cadastra o filho em Meus filhos', async ({ page }) => {
   await page.getByLabel('Nome da criança').fill(`${tag} Ana`);
   await page.getByLabel('Data de nascimento').fill('2019-04-02');
   await page.getByLabel('Alergias e cuidados (opcional)').fill('Alergia a amendoim');
-  await page.getByLabel(/Autorizo a igreja/).check();
+  await page.getByLabel(/Autorizo a instituição de ensino/).check();
   await page.getByRole('button', { name: 'Cadastrar' }).click();
   const card = page.locator('.kid-card', { hasText: `${tag} Ana` });
   await expect(card).toContainText('Alergia a amendoim');

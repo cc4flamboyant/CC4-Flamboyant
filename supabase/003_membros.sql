@@ -34,11 +34,11 @@ begin
       raise exception 'A conta é ligada ao cadastro quando a própria pessoa entra no app.' using errcode = '42501';
     end if;
     if new.role <> 'membro' and not v_admin then
-      raise exception 'Só o administrador da igreja define papéis.' using errcode = '42501';
+      raise exception 'Só o administrador da instituição de ensino define papéis.' using errcode = '42501';
     end if;
     if (select count(*) from public.members where church_id = new.church_id)
        >= (select max_members from public.churches where id = new.church_id) then
-      raise exception 'A igreja chegou ao limite de membros do plano.' using errcode = '54000';
+      raise exception 'A instituição de ensino chegou ao limite de membros do plano.' using errcode = '54000';
     end if;
     new.created_by := auth.uid();
     return new;
@@ -47,13 +47,13 @@ begin
   -- Tirar ou rebaixar um administrador: só outro administrador, e nunca o último.
   if old.role = 'admin' and (tg_op = 'DELETE' or new.role <> 'admin' or new.status <> 'ativo') then
     if not v_admin then
-      raise exception 'Só o administrador da igreja altera outro administrador.' using errcode = '42501';
+      raise exception 'Só o administrador da instituição de ensino altera outro administrador.' using errcode = '42501';
     end if;
     if not exists (
       select 1 from public.members
       where church_id = old.church_id and id <> old.id and role = 'admin' and status = 'ativo' and user_id is not null
     ) then
-      raise exception 'A igreja precisa de pelo menos um administrador.' using errcode = '42501';
+      raise exception 'A instituição de ensino precisa de pelo menos um administrador.' using errcode = '42501';
     end if;
   end if;
 
@@ -69,11 +69,11 @@ begin
     raise exception 'Este campo não pode ser alterado.' using errcode = '42501';
   end if;
   if new.role <> old.role and not v_admin then
-    raise exception 'Só o administrador da igreja define papéis.' using errcode = '42501';
+    raise exception 'Só o administrador da instituição de ensino define papéis.' using errcode = '42501';
   end if;
   -- O próprio membro (sem papel de liderança) não muda e-mail nem situação.
   if not v_leader and (new.email is distinct from old.email or new.status <> old.status) then
-    raise exception 'Peça à secretaria da igreja para alterar este dado.' using errcode = '42501';
+    raise exception 'Peça à secretaria da instituição de ensino para alterar este dado.' using errcode = '42501';
   end if;
   -- Quem já entrou no app usa este e-mail para entrar: trocar exige desligar a conta antes.
   if old.user_id is not null and lower(new.email) is distinct from lower(old.email) then
@@ -92,13 +92,13 @@ declare
 begin
   select * into m from public.members where id = p_member;
   if m.id is null or not public.has_role(m.church_id, 'admin') then
-    raise exception 'Só o administrador da igreja desliga contas.' using errcode = '42501';
+    raise exception 'Só o administrador da instituição de ensino desliga contas.' using errcode = '42501';
   end if;
   if m.role = 'admin' and not exists (
     select 1 from public.members
     where church_id = m.church_id and id <> m.id and role = 'admin' and status = 'ativo' and user_id is not null
   ) then
-    raise exception 'A igreja precisa de pelo menos um administrador.' using errcode = '42501';
+    raise exception 'A instituição de ensino precisa de pelo menos um administrador.' using errcode = '42501';
   end if;
   update public.members set user_id = null, consent_at = null where id = p_member;
 end $$;

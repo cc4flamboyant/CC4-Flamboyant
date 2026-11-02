@@ -113,7 +113,7 @@ function emailHtml(r, title, body) {
     </div>
     <p style="font-size:12px;color:#5f6475;text-align:center;margin-top:16px">
       Você recebe esta mensagem porque está no cadastro da ${esc(r.church_name)}.
-      <a href="${esc(churchUrl(r.church_slug))}" style="color:#5f6475">Abrir o app da igreja</a>
+      <a href="${esc(churchUrl(r.church_slug))}" style="color:#5f6475">Abrir o app da instituição de ensino</a>
     </p>
   </div></body></html>`;
 }

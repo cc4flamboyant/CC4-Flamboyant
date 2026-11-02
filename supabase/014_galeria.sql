@@ -46,7 +46,7 @@ declare
 begin
   select m.church_id into v_church from public.members m where m.id = p_member;
   if v_church is null or not coalesce(public.has_role(v_church, 'admin'), false) then
-    raise exception 'Só o administrador da igreja escolhe quem publica na galeria.' using errcode = '42501';
+    raise exception 'Só o administrador da instituição de ensino escolhe quem publica na galeria.' using errcode = '42501';
   end if;
   update public.members set gallery_publisher = coalesce(p_on, false) where id = p_member;
 end $$;

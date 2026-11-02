@@ -19,14 +19,14 @@ export function slugify(s) {
     .replace(/-+$/, '');
 }
 
-// Igreja da página: o endereço é .../i/<slug>/
+// Instituição de ensino da página: o endereço é .../i/<slug>/
 export function churchSlugFromPath(pathname) {
   const m = String(pathname).match(/\/i\/([a-z0-9]+(?:-[a-z0-9]+)*)\/?(?:index\.html)?$/);
   return m ? m[1] : null;
 }
 
-// Endereço da igreja no banco, com a chave pública no próprio endereço (sem cabeçalhos): a página
-// da igreja já pede este endereço junto com o HTML (preload, scripts/build-site.mjs) e o app usa a
+// Endereço da instituição de ensino no banco, com a chave pública no próprio endereço (sem cabeçalhos): a página
+// da instituição de ensino já pede este endereço junto com o HTML (preload, scripts/build-site.mjs) e o app usa a
 // mesma resposta ao abrir. Os dois precisam ser idênticos, por isso saem daqui.
 export const churchRestUrl = (supabaseUrl, anonKey, slug) =>
   `${supabaseUrl}/rest/v1/churches?select=*&slug=eq.${encodeURIComponent(slug)}&apikey=${encodeURIComponent(anonKey)}`;
@@ -107,7 +107,7 @@ export const ROLES = {
 };
 export const isLeaderRole = (role) => ['admin', 'secretaria', 'lider'].includes(role);
 
-// Funcionalidades que cada igreja liga ou desliga. "soon": ainda não disponível.
+// Funcionalidades que cada instituição de ensino liga ou desliga. "soon": ainda não disponível.
 export const FEATURES = [
   { key: 'aniversarios', label: 'Aniversários' },
   { key: 'agenda', label: 'Agenda e calendário' },
@@ -208,7 +208,7 @@ const COLUMNS = {
 export const MEMBERS_CSV_TEMPLATE = 'nome;email;telefone;nascimento\r\nMaria da Silva;maria@exemplo.com;(61) 99999-0000;15/03/1980\r\n';
 
 // Planilha de membros → linhas prontas para gravar, cada uma com os seus erros.
-// "existingEmails": e-mails (minúsculos) que a igreja já tem; essas linhas são puladas.
+// "existingEmails": e-mails (minúsculos) que a instituição de ensino já tem; essas linhas são puladas.
 export function parseMembersCsv(text, existingEmails = new Set(), today = new Date()) {
   const [header = [], ...lines] = parseCsv(text);
   const index = {};

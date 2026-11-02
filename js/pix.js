@@ -1,5 +1,5 @@
 // Pix "copia e cola" (BR Code estático, padrão EMV do Banco Central).
-// Gerado no aparelho: o dinheiro vai direto de quem oferta para a conta da igreja.
+// Gerado no aparelho: o dinheiro vai direto de quem oferta para a conta da instituição de ensino.
 // O app não recebe, não processa e não registra nenhum pagamento.
 
 export const PIX_TYPES = {

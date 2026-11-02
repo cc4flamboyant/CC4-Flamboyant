@@ -197,10 +197,10 @@ returns trigger language plpgsql security definer set search_path = '' as $$
 begin
   if new.guardian_member_id is not null
      and not exists (select 1 from public.members m where m.id = new.guardian_member_id and m.church_id = new.church_id) then
-    raise exception 'O responsável precisa ser do cadastro da mesma igreja.' using errcode = '42501';
+    raise exception 'O responsável precisa ser do cadastro da mesma instituição de ensino.' using errcode = '42501';
   end if;
   if tg_op = 'UPDATE' and (new.church_id <> old.church_id or new.guardian_member_id is distinct from old.guardian_member_id) then
-    raise exception 'Não dá para trocar a igreja nem o responsável.' using errcode = '42501';
+    raise exception 'Não dá para trocar a instituição de ensino nem o responsável.' using errcode = '42501';
   end if;
   return new;
 end $$;
@@ -234,10 +234,10 @@ returns trigger language plpgsql security definer set search_path = '' as $$
 begin
   if new.tutor_member_id is not null
      and not exists (select 1 from public.members m where m.id = new.tutor_member_id and m.church_id = new.church_id) then
-    raise exception 'O tutor precisa ser do cadastro da mesma igreja.' using errcode = '42501';
+    raise exception 'O tutor precisa ser do cadastro da mesma instituição de ensino.' using errcode = '42501';
   end if;
   if tg_op = 'UPDATE' and new.church_id <> old.church_id then
-    raise exception 'A sala não muda de igreja.' using errcode = '42501';
+    raise exception 'A sala não muda de instituição de ensino.' using errcode = '42501';
   end if;
   return new;
 end $$;
