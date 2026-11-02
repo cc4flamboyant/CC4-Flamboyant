@@ -1,0 +1,44 @@
+name: Mensagens de aniversário
+
+on:
+  schedule:
+    # 7h de Brasília (UTC-3). Reserva: quem chama na hora certa é o relógio do Supabase (007_relogio.sql).
+    # Rodar todo dia também mantém o projeto gratuito do Supabase acordado.
+    - cron: '0 10 * * *'
+  workflow_dispatch:
+    inputs:
+      teste_email:
+        description: 'Só mandar um e-mail de teste para o próprio Gmail (não envia nada aos membros)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aniversarios
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm install --no-save --no-audit --no-fund --no-package-lock web-push@3.6.7 nodemailer@6.10.1
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      - run: node scripts/enviar-aniversarios.mjs
+        env:
+          SITE_URL: https://DONO.github.io/REPOSITORIO
+          ENVIO_SECRET: ${{ secrets.ENVIO_SECRET }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          EMAIL_TEST: ${{ inputs.teste_email && '1' || '' }}
+          # E-mail pelo Gmail (sem domínio próprio). Sem eles, só sai o push.
+          GMAIL_USER: ${{ vars.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          # Alternativa futura, com domínio próprio: Resend.
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ vars.EMAIL_FROM }}

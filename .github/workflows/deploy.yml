@@ -1,0 +1,99 @@
+name: Publicar no GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Confere se o nome ou o ícone de alguma igreja (pastas i/<igreja>/) mudou; só publica se mudou.
+    - cron: '*/10 * * * *'
+
+# Cada etapa recebe só o que precisa: testes e conferência só leem; publicar escreve no Pages.
+permissions:
+  contents: read
+
+jobs:
+  # Mudança de código: testa no Android, no iPhone, as regras do banco e as funções do app.
+  # Roda na imagem oficial do Playwright, que já traz os navegadores (sem instalar nada na hora).
+  test:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Uma fila só para o projeto todo: as rodadas usam as mesmas contas de teste e o mesmo banco,
+    # então a próxima espera a anterior terminar (duas juntas se atrapalham e pesam no banco).
+    concurrency:
+      group: testes
+      cancel-in-progress: false
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
+    steps:
+      - uses: actions/checkout@v7
+      - run: npm install --no-audit --no-fund
+      # Testa o que vai ao ar: o código num arquivo só, como o build publica.
+      - run: node scripts/build-site.mjs --sem-igrejas
+      - run: npx playwright test
+        env:
+          HOME: /root
+          SITE_DIR: _site
+          # Senha das contas de teste das igrejas Teste A e Teste B (scripts/criar-usuarios-de-teste.mjs)
+          TEST_USERS_PASSWORD: ${{ secrets.TEST_USERS_PASSWORD }}
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: relatorio-dos-testes
+          path: playwright-report
+          retention-days: 3
+
+  # Agendado: compara as igrejas do site com as do banco (rápido, sem testes: o código não mudou).
+  check:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      changed: ${{ steps.compare.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - id: compare
+        run: node scripts/igrejas-mudaram.mjs
+        env:
+          SITE_URL: https://DONO.github.io/REPOSITORIO
+
+  # Publica só se os testes passaram (ou se foi só a atualização das igrejas, sem mudança de código).
+  deploy:
+    needs: [test, check]
+    if: >-
+      always() && github.event_name != 'pull_request' &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped') &&
+      (github.event_name != 'schedule' || needs.check.outputs.changed == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: pages
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - id: pages
+        uses: actions/configure-pages@v6
+      - run: npm install --no-audit --no-fund
+      - run: node scripts/build-site.mjs
+        env:
+          SITE_URL: ${{ steps.pages.outputs.base_url }}
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v5

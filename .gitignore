@@ -1,0 +1,13 @@
+_site/
+node_modules/
+.DS_Store
+Thumbs.db
+test-results/
+playwright-report/
+package-lock.json
+
+# Scripts só para este computador (exemplos, testes)
+supabase/*.local.sql
+
+# Senha das contas de teste (vai só no segredo TEST_USERS_PASSWORD do GitHub)
+tests/*.local
