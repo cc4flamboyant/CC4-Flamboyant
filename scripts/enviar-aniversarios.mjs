@@ -15,7 +15,7 @@ const ANON_KEY = pick('SUPABASE_ANON_KEY');
 const VAPID_PUBLIC_KEY = pick('VAPID_PUBLIC_KEY');
 
 const { ENVIO_SECRET, VAPID_PRIVATE_KEY, EMAIL_TEST } = process.env;
-const SITE_URL = (process.env.SITE_URL || 'https://DONO.github.io/REPOSITORIO').replace(/\/$/, '');
+const SITE_URL = (process.env.SITE_URL || 'https://cc4flamboyant.github.io/CC4-Flamboyant').replace(/\/$/, '');
 if (!ENVIO_SECRET || !VAPID_PRIVATE_KEY) throw new Error('Faltam os segredos ENVIO_SECRET e VAPID_PRIVATE_KEY.');
 
 if (EMAIL_TEST === '1') {

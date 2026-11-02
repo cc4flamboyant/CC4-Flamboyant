@@ -60,7 +60,7 @@ jobs:
       - id: compare
         run: node scripts/igrejas-mudaram.mjs
         env:
-          SITE_URL: https://DONO.github.io/REPOSITORIO
+          SITE_URL: https://cc4flamboyant.github.io/CC4-Flamboyant
 
   # Publica só se os testes passaram (ou se foi só a atualização das igrejas, sem mudança de código).
   deploy:

@@ -37,7 +37,7 @@ begin
     return null;
   end if;
   return net.http_post(
-    url := 'https://api.github.com/repos/DONO/REPOSITORIO/actions/workflows/' || p_workflow || '/dispatches',
+    url := 'https://api.github.com/repos/cc4flamboyant/CC4-Flamboyant/actions/workflows/' || p_workflow || '/dispatches',
     headers := jsonb_build_object(
       'Authorization', 'Bearer ' || v_token,
       'Accept', 'application/vnd.github+json',

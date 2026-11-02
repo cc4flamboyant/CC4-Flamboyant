@@ -16,7 +16,7 @@ concurrency:
   group: funcoes
 
 env:
-  PROJECT_REF: SEU-PROJETO
+  PROJECT_REF: gtwavjxnzrggegtsajyu
 
 jobs:
   deploy:

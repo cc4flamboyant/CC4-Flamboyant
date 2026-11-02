@@ -11,7 +11,7 @@ import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 
 const args = new Set(process.argv.slice(2));
-const SITE = 'https://DONO.github.io/REPOSITORIO/';
+const SITE = 'https://cc4flamboyant.github.io/CC4-Flamboyant/';
 const config = readFileSync('js/config.js', 'utf8');
 const SUPABASE_URL = config.match(/SUPABASE_URL:\s*'([^']+)'/)?.[1];
 const ANON_KEY = config.match(/SUPABASE_ANON_KEY:\s*'([^']+)'/)?.[1];

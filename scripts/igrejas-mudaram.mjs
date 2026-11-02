@@ -4,7 +4,7 @@
 import { appendFileSync } from 'node:fs';
 import { fetchPublicChurches } from './igrejas-publicas.mjs';
 
-const SITE_URL = (process.env.SITE_URL || 'https://DONO.github.io/REPOSITORIO').replace(/\/$/, '');
+const SITE_URL = (process.env.SITE_URL || 'https://cc4flamboyant.github.io/CC4-Flamboyant').replace(/\/$/, '');
 
 function answer(changed, why) {
   console.log(why);

@@ -3,8 +3,8 @@
 // gravados aqui pelo workflow funcoes.yml. Os outros avisos saem pelo envio dos lembretes.
 import webpush from 'npm:web-push@3.6.7';
 
-const SITE_URL = 'https://DONO.github.io/REPOSITORIO';
-const ORIGINS = ['https://DONO.github.io', 'http://localhost:4173'];
+const SITE_URL = 'https://cc4flamboyant.github.io/CC4-Flamboyant';
+const ORIGINS = ['https://cc4flamboyant.github.io', 'http://localhost:4173'];
 // Chave pública (a mesma de js/config.js).
 const VAPID_PUBLIC_KEY = 'BJShYv6bENLmIv5Djm9bRmvn_HN5zcuGBC-x9FCIZMa9fNp1_qBeHGZZIa_yGa7teqMd3Du2xDtIPFcs00rNgZw';
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
