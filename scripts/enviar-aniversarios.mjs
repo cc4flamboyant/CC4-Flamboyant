@@ -14,7 +14,10 @@ const SUPABASE_URL = pick('SUPABASE_URL');
 const ANON_KEY = pick('SUPABASE_ANON_KEY');
 const VAPID_PUBLIC_KEY = pick('VAPID_PUBLIC_KEY');
 
-const { ENVIO_SECRET, VAPID_PRIVATE_KEY, EMAIL_TEST } = process.env;
+// trim(): o segredo colado no GitHub pode vir com uma quebra de linha no fim.
+const ENVIO_SECRET = process.env.ENVIO_SECRET?.trim();
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY?.trim();
+const { EMAIL_TEST } = process.env;
 const SITE_URL = (process.env.SITE_URL || 'https://cc4flamboyant.github.io/CC4-Flamboyant').replace(/\/$/, '');
 if (!ENVIO_SECRET || !VAPID_PRIVATE_KEY) throw new Error('Faltam os segredos ENVIO_SECRET e VAPID_PRIVATE_KEY.');
 
