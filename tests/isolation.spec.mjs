@@ -461,8 +461,8 @@ test.describe('Os próprios dados: exportar, sair e excluir (006)', () => {
     expect(data.conta.email).toBe('membro-a@teste.igrejaconecta.invalid');
     expect(data.igrejas).toHaveLength(1);
     expect(data.igrejas[0]).toMatchObject({ igreja: 'Igreja Teste A', papel: 'membro', cadastro: { nome: 'Membro da A' } });
-    // As conversas do chat trazem o nome de quem conversou com a pessoa (são dela também); o resto, nada dos outros.
-    const { conversas_do_chat: chats, ...rest } = data;
+    // Nada dos outros (as conversas do chat, se um dia existirem, trazem só quem conversou com a pessoa).
+    const { conversas_do_chat: chats = [], ...rest } = data; // o CC4 não tem chat
     const text = JSON.stringify(rest);
     for (const other of ['Fulano', 'Bissexto', 'Casada', 'Batizado', 'Admin da A', 'Teste B', '5561999990001']) expect(text, other).not.toContain(other);
     for (const c of chats) expect(c.mensagens.every((m) => ['você', c.com].includes(m.de))).toBe(true);

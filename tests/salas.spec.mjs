@@ -65,7 +65,7 @@ test('a liderança cria a sala com o tutor e coloca a criança', async ({ page }
 
   await page.goto('/i/teste-a/#/salas/criancas');
   await page.getByRole('link', { name: new RegExp(`${tag} Ana`) }).click();
-  await page.getByLabel('Sala').selectOption({ label: `${tag} Kids` });
+  await page.getByRole('combobox', { name: /^Sala/ }).selectOption({ label: `${tag} Kids` });
   await page.getByRole('button', { name: 'Salvar' }).click();
   await expect(page.locator('.page')).toContainText(`Sala ${tag} Kids`);
 });
@@ -117,11 +117,13 @@ test('calendário: o mês mostra o evento; o dia mostra os horários; a líder c
   await expect(slot).toContainText('20h');
   await page.goto(`/i/teste-a/#/calendario/${day.slice(0, 7)}`);
   const cell = page.locator(`a.cal-day[href="#/calendario/dia/${day}"]`);
-  await expect(cell).toContainText(`Ensaio ${tag}`);
+  // A célula mostra até dois títulos e "+N" (outros testes também criam eventos neste dia).
+  await expect(cell).toHaveAttribute('aria-label', /evento/);
   // A grade cabe na tela do celular, sem rolar para o lado.
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await cell.click();
   await expect(page).toHaveURL(new RegExp(`calendario/dia/${day}`));
+  await expect(page.locator('.day-slot', { hasText: `Ensaio ${tag}` })).toBeVisible();
 });
 
 test('a aba Agenda abre o calendário e a lista continua a um toque', async ({ page }) => {

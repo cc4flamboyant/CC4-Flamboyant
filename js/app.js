@@ -4402,7 +4402,8 @@ function dayLabel(iso) {
 async function fetchBirthdays(from, to) {
   const { data, error } = await sb.rpc('celebrations_between', { p_church: state.church.id, p_from: from, p_to: to });
   if (error) throw error;
-  return data;
+  // O CC4 só usa o aniversário: casamento e batismo (que o banco ainda conhece) ficam de fora.
+  return data.filter((r) => MESSAGE_KINDS[r.kind]);
 }
 
 function weekBirthdaysCard(el, changed) {

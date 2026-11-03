@@ -74,13 +74,19 @@ test('o admin vê a prévia da mensagem com os campos trocados', async ({ page }
 });
 
 test('o Início mostra avisos, eventos e aniversariantes num carrossel abaixo dos atalhos', async ({ page }) => {
-  // 10/06/2027: "Casada da A" faz aniversário de casamento no dia 12. Aviso e evento fixos.
+  // 10/06/2027. Aviso, evento e aniversariante fixos; o casamento (o CC4 não usa) não aparece.
   await page.clock.setFixedTime(new Date('2027-06-10T12:00:00-03:00'));
   await page.route('**/rest/v1/announcements?*', (r) =>
     r.fulfill({ json: [{ id: 'a1', title: 'Retiro de jovens', body: 'Inscrições abertas', pinned: false, created_at: '2027-06-09T12:00:00Z' }] }),
   );
   await page.route('**/rest/v1/rpc/events_between', (r) =>
     r.fulfill({ json: [{ event_id: 'e1', title: 'Culto de domingo', starts_at: '2027-06-13T22:00:00Z', ends_at: null, location: null, repeat_weekly: false }] }),
+  );
+  await page.route('**/rest/v1/rpc/celebrations_between', (r) =>
+    r.fulfill({ json: [
+      { member_id: 'm1', name: 'Casada da A', kind: 'casamento', on_date: '2027-06-12', photo_path: null, years: 17 },
+      { member_id: 'm2', name: 'Fulano da A', kind: 'aniversario', on_date: '2027-06-13', photo_path: null, years: null },
+    ] }),
   );
   await openLoggedIn(page, accounts['lider-a'].session, '/i/teste-a/#/');
   const carousel = page.locator('#home-carousel');
@@ -96,4 +102,6 @@ test('o Início mostra avisos, eventos e aniversariantes num carrossel abaixo do
   await dots.nth(2).click();
   await expect(dots.nth(2)).toHaveAttribute('aria-current', 'true');
   await expect(carousel.locator('#week-birthdays')).toBeInViewport();
+  await expect(carousel.locator('#week-birthdays')).toContainText('Fulano da A');
+  await expect(carousel.locator('#week-birthdays')).not.toContainText('Casada da A');
 });

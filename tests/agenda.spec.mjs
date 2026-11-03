@@ -111,7 +111,7 @@ test('a central mostra as notificações por dia, com destaque nas não lidas', 
   await openLoggedIn(page, as['membro-a'].session, '/i/teste-a/#/notificacoes');
   await expect(page.locator('.notif-day')).toHaveText(['Hoje', 'Ontem', 'Mais antigas']);
   await expect(page.locator('.notif-row.unread')).toHaveCount(1);
-  await expect(page.locator('.notif-row.unread')).toContainText('Seu pedido de oração está no mural');
+  await expect(page.locator('.notif-row.unread')).toContainText('Sala Kids: Domingo tem passeio');
   await expect(page.locator('.notif-row').nth(1).locator('.notif-icon')).toHaveClass(/k-agenda/);
   await expect(page.getByRole('button', { name: 'Apagar as lidas' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Ver mais' })).toBeHidden();
@@ -158,17 +158,16 @@ test('Agenda, Avisos e o evento abrem na hora pelas abas, mesmo com o banco demo
   });
   const fast = { timeout: 1000 };
   await page.locator('#tabbar').getByRole('link', { name: 'Agenda' }).click();
+  await page.getByRole('navigation', { name: 'Vista da agenda' }).getByRole('link', { name: 'Lista' }).click(); // a aba abre o calendário
   await expect(page.locator('.event-card', { hasText: `Culto ${tag}` }).first()).toBeVisible(fast);
   await page.locator('#tabbar').getByRole('link', { name: 'Avisos' }).click();
   await expect(page.locator('.announcement', { hasText: `Aviso ${tag}` })).toBeVisible(fast);
   await page.locator('#tabbar').getByRole('link', { name: 'Agenda' }).click();
+  await page.getByRole('navigation', { name: 'Vista da agenda' }).getByRole('link', { name: 'Lista' }).click(); // a aba abre o calendário
   await page.locator('.event-card', { hasText: `Culto ${tag}` }).first().click();
   await expect(page.getByRole('heading', { name: `Culto ${tag}` })).toBeVisible(fast);
 
   // As outras telas do Menu e o sininho também já vêm prontas.
-  await page.locator('#tabbar').getByRole('link', { name: 'Menu' }).click();
-  await page.getByRole('link', { name: 'Pedidos de oração' }).click();
-  await expect(page.getByRole('link', { name: 'Fazer um pedido' })).toBeVisible(fast);
   await page.locator('#tabbar').getByRole('link', { name: 'Menu' }).click();
   await page.getByRole('link', { name: 'Aniversariantes do mês' }).click();
   await expect(page.getByRole('heading', { name: /^Aniversariantes de / }).first()).toBeVisible(fast);
@@ -194,6 +193,7 @@ test('Meu cadastro, a ficha do membro e editar evento e aviso também abrem na h
   await expect(page.getByLabel('Nome')).toHaveValue('Fulano da A', fast);
 
   await page.locator('#tabbar').getByRole('link', { name: 'Agenda' }).click();
+  await page.getByRole('navigation', { name: 'Vista da agenda' }).getByRole('link', { name: 'Lista' }).click(); // a aba abre o calendário
   await page.locator('.event-card', { hasText: `Culto ${tag}` }).first().click();
   await page.getByRole('link', { name: 'Editar' }).click();
   await expect(page.getByLabel('Título')).toHaveValue(`Culto ${tag}`, fast);
