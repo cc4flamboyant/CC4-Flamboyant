@@ -137,7 +137,8 @@ test('o vídeo abre em tela cheia no app, com Voltar e o campo para escrever sob
   await expect(quote).toContainText('Você');
   await expect(quote).toContainText('🎥 Vídeo');
   await quote.click();
-  await expect(page.locator('.msg.flash').locator('video.msg-video')).toHaveCount(1);
+  // (o destaque dura pouco e a conversa pode se redesenhar: confere que o vídeo ficou à vista)
+  await expect(page.locator('.msg', { has: page.locator('video.msg-video') }).last()).toBeInViewport();
   // Recarregando, a citação continua (vem do banco).
   await page.reload();
   await expect(page.locator('.msg.mine').last().locator('.msg-quote')).toContainText('🎥 Vídeo');

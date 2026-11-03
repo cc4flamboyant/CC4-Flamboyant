@@ -148,6 +148,18 @@ dialog.ask h2 { margin: 0 0 8px; font-size: 1.05rem; }
 dialog.ask p { margin: 0 0 14px; }
 dialog.ask input { width: 100%; margin-bottom: 14px; }
 dialog.ask .actions-row { justify-content: flex-end; margin: 0; }
+/* Menu de ações (manter pressionado): abre de baixo no celular, com botões largos. */
+dialog.action-menu .action-list { display: flex; flex-direction: column; gap: 8px; }
+dialog.action-menu .action-list .btn { width: 100%; justify-content: center; min-height: 48px; }
+dialog.action-menu h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 600px) {
+  dialog.action-menu { margin: auto auto 0; width: 100%; max-width: none; border-radius: var(--radius) var(--radius) 0 0;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
+}
+/* Item que abre o menu ao manter o dedo pressionado: sem seleção de texto nem menu do navegador. */
+.pressable { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; transition: transform .15s; }
+.pressable.pressing { transform: scale(.98); }
+.pressable:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .btn:disabled { opacity: .6; cursor: default; }
 .btn.google { background: #fff; color: #1f1f1f; border-color: #dadce0; }
 .btn.google .g { width: 20px; height: 20px; }

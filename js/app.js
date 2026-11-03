@@ -327,6 +327,92 @@ function ask(message, { ok, danger, input, value = '', placeholder = '', readonl
   });
 }
 
+// Manter o dedo pressionado (meio segundo) num item: chama onPress(item). Mexer o dedo (rolar a
+// tela) cancela. No computador: botão direito do mouse, ou Enter / tecla de menu no item com foco.
+// Toques em botões, links e campos dentro do item não contam.
+const LONG_PRESS_MS = 500;
+function longPress(container, selector, onPress) {
+  let timer = null;
+  let start = null;
+  let fired = false;
+  const skip = (t) => t.closest('button, a, input, textarea, select, summary, .reactions');
+  const cancel = () => {
+    clearTimeout(timer);
+    timer = null;
+    container.querySelector('.pressing')?.classList.remove('pressing');
+  };
+  container.addEventListener('pointerdown', (e) => {
+    const item = e.target.closest(selector);
+    if (!item || skip(e.target) || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    fired = false;
+    start = { x: e.clientX, y: e.clientY };
+    item.classList.add('pressing');
+    timer = setTimeout(() => {
+      timer = null;
+      fired = true;
+      item.classList.remove('pressing');
+      navigator.vibrate?.(25);
+      onPress(item);
+    }, LONG_PRESS_MS);
+  });
+  container.addEventListener('pointermove', (e) => {
+    if (timer && start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) cancel();
+  });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) container.addEventListener(ev, cancel);
+  const onScroll = () => (container.isConnected ? cancel() : window.removeEventListener('scroll', onScroll));
+  window.addEventListener('scroll', onScroll, { passive: true });
+  // O toque que abriu o menu não vira clique; o menu do navegador (copiar, imagem) não aparece.
+  container.addEventListener('click', (e) => {
+    if (fired) {
+      e.preventDefault();
+      e.stopPropagation();
+      fired = false;
+    }
+  }, true);
+  container.addEventListener('contextmenu', (e) => {
+    const item = e.target.closest(selector);
+    if (!item || skip(e.target)) return;
+    e.preventDefault();
+    if (fired) return; // o toque longo já abriu
+    cancel();
+    onPress(item);
+  });
+  container.addEventListener('keydown', (e) => {
+    const item = e.target.matches?.(selector) ? e.target : null;
+    if (item && (e.key === 'Enter' || e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) {
+      e.preventDefault();
+      onPress(item);
+    }
+  });
+}
+
+// Menu de ações (abre de baixo no celular): items = [[valor, texto, vermelho?]]. Devolve o valor ou null.
+function actionMenu(title, items) {
+  const dlg = document.createElement('dialog');
+  dlg.className = 'ask action-menu';
+  dlg.innerHTML = `
+    <form method="dialog">
+      <h2></h2>
+      <div class="action-list" role="menu">
+        ${items.map(([v, text, red]) => `<button class="btn${red ? ' danger-outline' : ''}" role="menuitem" value="${esc(v)}">${esc(text)}</button>`).join('')}
+        <button class="btn ghost" value="cancel">Cancelar</button>
+      </div>
+    </form>`;
+  dlg.querySelector('h2').textContent = title;
+  document.body.append(dlg);
+  return new Promise((resolve) => {
+    dlg.addEventListener('close', () => {
+      const v = dlg.returnValue;
+      dlg.remove();
+      resolve(v && v !== 'cancel' ? v : null);
+    });
+    // Tocar fora do menu fecha.
+    dlg.addEventListener('click', (e) => e.target === dlg && dlg.close('cancel'));
+    dlg.showModal();
+    dlg.querySelector('[role="menuitem"]')?.focus();
+  });
+}
+
 // Botão redondo com "+" no canto inferior direito, para criar algo na tela (conversa, evento, aviso).
 const fab = (href, label) => `<a class="fab" href="${href}" aria-label="${esc(label)}" title="${esc(label)}">${icon.plus}</a>`;
 // Mais de uma forma de criar na mesma tela: o "+" abre um menu com as opções ([href, texto]).
@@ -3201,7 +3287,8 @@ function drawAnnouncements(all) {
       ${
         visible.length
           ? `<label class="search">${icon.search}<input type="search" id="announcement-q" placeholder="Buscar nos avisos" aria-label="Buscar nos avisos" value="${esc(announcementQuery)}"></label>
-             <p class="hint" id="announcement-count" aria-live="polite"></p>`
+             <p class="hint" id="announcement-count" aria-live="polite"></p>
+             ${leader ? '<p class="hint press-hint">Mantenha o dedo pressionado num aviso para editar ou excluir.</p>' : ''}`
           : ''
       }
       <div id="announcements"></div>
@@ -3220,7 +3307,7 @@ function drawAnnouncements(all) {
           .map((a) => {
             const expired = a.visible_until && a.visible_until < today;
             return `
-            <article class="card announcement ${expired ? 'expired' : ''}">
+            <article class="card announcement ${expired ? 'expired' : ''}${leader ? ' pressable' : ''}" data-id="${esc(a.id)}"${leader ? ` tabindex="0" aria-haspopup="menu" aria-description="Mantenha pressionado (ou Enter) para editar ou excluir"` : ''}>
               <div class="tags-row">
                 ${a.pinned ? '<span class="tag role">Fixado</span>' : ''}
                 ${expired ? '<span class="tag">Vencido (só a liderança vê)</span>' : a.visible_until && leader ? `<span class="tag">Até ${esc(fmtDate(a.visible_until))}</span>` : ''}
@@ -3229,7 +3316,6 @@ function drawAnnouncements(all) {
               <p class="pre">${esc(a.body)}</p>
               <p class="hint">${esc(new Date(a.created_at).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' }))}</p>
               ${reactionsBar(a)}
-              ${leader ? `<div class="actions-row"><a class="btn small" href="#/avisos/${a.id}/editar">Editar</a><button class="btn small danger-outline" data-delete="${a.id}">Excluir</button></div>` : ''}
             </article>`;
           })
           .join('')
@@ -3242,6 +3328,7 @@ function drawAnnouncements(all) {
     announcementQuery = q.value;
     fill();
   });
+  if (leader) announcementMenu(all, box);
   fill();
 }
 
@@ -3278,15 +3365,24 @@ function wireAnnouncements(all, box, fill) {
       }
     };
   });
-  box.querySelectorAll('[data-delete]').forEach((b) => {
-    b.onclick = async () => {
-      if (!await ask('Excluir este aviso?')) return;
-      const { data, error: err } = await sb.from('announcements').delete().eq('id', b.dataset.delete).select('id');
-      if (err || !data.length) return toast(err ? errorText(err) : 'Você não tem permissão para excluir.', 'error');
-      screenForget('avisos');
-      toast('Aviso excluído.');
-      render();
-    };
+}
+
+// A liderança mantém o dedo pressionado no aviso: menu com Editar e Excluir.
+function announcementMenu(all, box) {
+  longPress(box, '.announcement.pressable', async (card) => {
+    const a = all.find((x) => x.id === card.dataset.id);
+    if (!a) return;
+    const choice = await actionMenu(a.title, [
+      ['editar', 'Editar'],
+      ['excluir', 'Excluir', true],
+    ]);
+    if (choice === 'editar') return navigate(`/avisos/${a.id}/editar`);
+    if (choice !== 'excluir' || !(await ask('Excluir este aviso?'))) return;
+    const { data, error: err } = await sb.from('announcements').delete().eq('id', a.id).select('id');
+    if (err || !data.length) return toast(err ? errorText(err) : 'Você não tem permissão para excluir.', 'error');
+    screenForget('avisos');
+    toast('Aviso excluído.');
+    render();
   });
 }
 

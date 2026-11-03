@@ -1,7 +1,7 @@
 // Agenda, avisos e central de notificações nas telas, com contas da igreja Teste A (Android).
 // O que o teste cria leva uma marca no título e é apagado no fim.
 import { test, expect } from '@playwright/test';
-import { rest, configured, testPassword, loginAs, openLoggedIn, watchCsp, cspViolations } from './helpers.mjs';
+import { rest, configured, testPassword, loginAs, openLoggedIn, answer, watchCsp, cspViolations } from './helpers.mjs';
 
 // Nada pode ser bloqueado pela regra de segurança das páginas (CSP).
 test.beforeEach(async ({ page }) => watchCsp(page));
@@ -105,6 +105,47 @@ test('o membro busca nos avisos pelo título e pelo texto, sem acento e sem mai�
   await search.fill('');
   await expect(card).toBeVisible();
   await expect(page.locator('#announcement-count')).toHaveText('');
+});
+
+test('a liderança edita e exclui o aviso mantendo o dedo pressionado; o membro não', async ({ page, browser }) => {
+  const [{ id: church }] = await (await api.get(rest('churches?select=id&slug=eq.teste-a'), { headers: as['lider-a'].headers })).json();
+  const title = `Aviso apagar ${tag}`;
+  const made = await api.post(rest('announcements'), { headers: as['lider-a'].headers, data: { church_id: church, title, body: 'Vai ser excluído.' } });
+  expect(made.ok(), await made.text()).toBe(true);
+
+  await openLoggedIn(page, as['lider-a'].session, '/i/teste-a/#/avisos');
+  const card = page.locator('.announcement', { hasText: title });
+  await expect(card).toBeVisible();
+  // Sem os botões no cartão; a dica aparece para a liderança.
+  await expect(page.locator('.announcement').getByRole('button', { name: 'Excluir' })).toHaveCount(0);
+  await expect(page.locator('.announcement').getByRole('link', { name: 'Editar' })).toHaveCount(0);
+  await expect(page.getByText('Mantenha o dedo pressionado num aviso para editar ou excluir.')).toBeVisible();
+  // Toque rápido não abre o menu.
+  await card.locator('h2').click();
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  // Pressionar e segurar: Editar, Excluir e Cancelar.
+  await card.locator('h2').click({ delay: 700 });
+  const menu = page.getByRole('menu');
+  await expect(menu.getByRole('menuitem', { name: 'Editar' })).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: 'Excluir' })).toBeVisible();
+  await page.getByRole('button', { name: 'Cancelar' }).click();
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(card).toBeVisible();
+  // O membro: pressionar não abre nada e não há dica.
+  const member = await (await browser.newContext({ ...test.info().project.use, baseURL: 'http://localhost:4173/' })).newPage();
+  await openLoggedIn(member, as['membro-a'].session, '/i/teste-a/#/avisos');
+  await member.locator('.announcement', { hasText: title }).locator('h2').click({ delay: 700 });
+  await expect(member.getByRole('menu')).toHaveCount(0);
+  await expect(member.getByText('Mantenha o dedo pressionado')).toHaveCount(0);
+  await member.context().close();
+
+  // Excluir pede confirmação e tira o aviso.
+  await card.locator('h2').click({ delay: 700 });
+  await page.getByRole('menuitem', { name: 'Excluir' }).click();
+  await answer(page);
+  await expect(page.getByText('Aviso excluído.')).toBeVisible();
+  await expect(card).toHaveCount(0);
+
 });
 
 test('o membro reage ao aviso com emoji, troca e tira, e a reação fica gravada', async ({ page }) => {
@@ -252,7 +293,9 @@ test('Meu cadastro, a ficha do membro e editar evento e aviso também abrem na h
   await expect(page.getByLabel('Título')).toHaveValue(`Culto ${tag}`, fast);
 
   await page.locator('#tabbar').getByRole('link', { name: 'Avisos' }).click();
-  await page.locator('.announcement', { hasText: `Aviso ${tag}` }).getByRole('link', { name: 'Editar' }).click();
+  // Editar: manter o dedo pressionado no aviso.
+  await page.locator('.announcement', { hasText: `Aviso ${tag}` }).locator('h2').click({ delay: 700 });
+  await page.getByRole('menuitem', { name: 'Editar' }).click();
   await expect(page.getByLabel('Título')).toHaveValue(`Aviso ${tag}`, fast);
 });
 
