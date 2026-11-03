@@ -185,6 +185,28 @@ test.describe('Banco: visitante sem login (chat, 020)', () => {
   });
 });
 
+test.describe('Banco: visitante sem login (projetos das salas, 021)', () => {
+  test('não lê projetos, etapas, arquivos nem comentários; não grava nada', async ({ request }) => {
+    for (const table of ['room_projects', 'project_steps', 'project_files', 'project_comments']) {
+      const res = await request.get(rest(`${table}?select=*`), { headers });
+      if (res.ok()) expect(await res.json(), table).toEqual([]);
+    }
+    expect((await request.post(rest('room_projects'), { headers, data: { room_id: UUID, church_id: UUID, title: 'Intruso' } })).ok()).toBe(false);
+    const calls = {
+      projects_list: { p_church: UUID },
+      project_comment_list: { p_project: UUID },
+      project_comment: { p_project: UUID, p_body: 'Intruso' },
+      project_add_file: { p_project: UUID, p_name: 'x.txt', p_type: 'text/plain', p_size: 1, p_ext: 'txt' },
+      project_file_ready: { p_file: UUID },
+      sees_room_projects: { p_room: UUID },
+      chat_icon_ok: { p_group: UUID, p_path: 'x' },
+    };
+    for (const [fn, data] of Object.entries(calls)) expect((await rpc(request, fn, data)).ok(), fn).toBe(false);
+    const list = await request.post(`${SUPABASE_URL}/storage/v1/object/list/projetos`, { headers: storageHeaders, data: { prefix: '', limit: 10 } });
+    if (list.ok()) expect(await list.json()).toEqual([]);
+  });
+});
+
 // Teste de vulnerabilidade (016): funções de gatilho e de cálculo ficam fora do alcance de quem não
 // está logado. As das regras de leitura continuam (respondem "não" para quem não está logado).
 test.describe('Banco: visitante sem login (funções que ele não usa, 016)', () => {

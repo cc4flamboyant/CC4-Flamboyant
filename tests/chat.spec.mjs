@@ -67,6 +67,17 @@ test('a liderança cria o grupo, escolhe quem participa e escreve com emoji, lin
   await page.locator('#chat-file').setInputFiles({ name: 'lista.txt', mimeType: 'text/plain', buffer: Buffer.from('Material da semana') });
   await expect(page.locator('.msg.mine').last().locator('.msg-doc')).toContainText('lista.txt');
   await expect(page.locator('.msg.mine').last().locator('a.msg-doc')).toBeVisible({ timeout: 15000 });
+
+  // O administrador troca o ícone do grupo: aparece nos dados do grupo, na conversa e na lista.
+  const shot = await page.screenshot();
+  await page.locator('.chat-title').click();
+  await page.locator('#group-icon').setInputFiles({ name: 'icone.png', mimeType: 'image/png', buffer: shot });
+  await expect(page.getByText('Ícone do grupo trocado.')).toBeVisible({ timeout: 15000 });
+  await expect(page.locator('.chat-info-head .avatar img')).toBeVisible();
+  await page.getByRole('link', { name: '← Conversa' }).click();
+  await expect(page.locator('#chat-icon .avatar img')).toBeVisible();
+  await page.locator('.chat-back').click();
+  await expect(page.locator('.chat-row').filter({ hasText: name }).locator('.avatar img')).toBeVisible();
 });
 
 test('o membro vê a mensagem nova; com o grupo bloqueado, só lê', async ({ page }) => {

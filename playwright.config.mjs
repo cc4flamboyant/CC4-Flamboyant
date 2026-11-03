@@ -25,7 +25,7 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
   },
   projects: [
-    { name: 'android', use: { ...devices['Pixel 7'] }, testMatch: /(site|members|birthdays|agenda|privacy|help|abertura|salas|carteirinha|galeria|chat|tema|icones|filtros)\.spec\.mjs/ },
+    { name: 'android', use: { ...devices['Pixel 7'] }, testMatch: /(site|members|birthdays|agenda|privacy|help|abertura|salas|carteirinha|galeria|chat|projetos|tema|icones|filtros)\.spec\.mjs/ },
     { name: 'iphone', use: { ...devices['iPhone 14'] }, testMatch: /site\.spec\.mjs/ },
     { name: 'banco-e-codigo', testMatch: /(security|isolation|units)\.spec\.mjs/ },
   ],

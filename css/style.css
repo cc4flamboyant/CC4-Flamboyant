@@ -1042,3 +1042,37 @@ body:not(.has-tabbar) .chat-compose-slot { bottom: env(safe-area-inset-bottom); 
 .pick-list li + li { border-top: 1px solid var(--line); }
 .pick-list li[hidden] { display: none; }
 .pick-all { margin: 4px 0 8px; font-weight: 600; }
+.avatar.small { width: 38px; height: 38px; font-size: .85rem; }
+.chat-title { flex-direction: row; align-items: center; gap: 10px; }
+.chat-title-text { display: flex; flex-direction: column; min-width: 0; }
+.chat-title-text strong, .chat-title-text small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-title-text small { color: var(--muted); font-size: .8rem; }
+.chat-info-head { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+.chat-info-head h1 { margin: 0; }
+
+/* Projetos das salas */
+.project-card { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); color: var(--ink); text-decoration: none; }
+.project-card small { color: var(--muted); }
+.project-card .progress { margin: 6px 0 0; height: 8px; }
+.project-room { font-size: .78rem; font-weight: 700; color: var(--link); text-transform: uppercase; letter-spacing: .02em; }
+.project-counts:empty { display: none; }
+.steps { list-style: none; margin: 8px 0; padding: 0; }
+.steps li { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); }
+.steps li .check { flex: 1; }
+.steps li.done span { color: var(--muted); }
+.steps li.done .check span { text-decoration: line-through; }
+.step-mark { flex: none; }
+.step-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.step-form input[name="title"] { flex: 1 1 180px; margin: 0; }
+.step-form input[type="date"] { flex: 0 1 160px; margin: 0; }
+.step-form .btn { flex: none; }
+.project-files { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 12px; }
+.project-file { display: flex; align-items: flex-start; gap: 6px; }
+.project-file > :first-child { flex: 1; min-width: 0; }
+.comments { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 12px; }
+.comment { padding: 8px 12px; border-radius: 12px; background: color-mix(in srgb, var(--line) 45%, transparent); position: relative; }
+.comment .msg-del { position: absolute; top: 6px; right: 6px; }
+.comment p { margin: 4px 0 0; overflow-wrap: anywhere; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

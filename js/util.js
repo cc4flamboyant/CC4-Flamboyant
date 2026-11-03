@@ -116,6 +116,7 @@ export const FEATURES = [
   { key: 'carteirinha', label: 'Carteirinha digital' },
   { key: 'galeria', label: 'Galeria de fotos' },
   { key: 'chat', label: 'Chat em grupos' },
+  { key: 'projetos', label: 'Projetos das salas (precisa das salas)' },
   { key: 'pix', label: 'Pix' },
 ];
 

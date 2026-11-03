@@ -1023,6 +1023,9 @@ test.describe('Chat em grupos (020)', () => {
     expect((await putFile('lider-a', liderPath)).ok()).toBe(true);
     await api.delete(`${SUPABASE_URL}/storage/v1/object/chat`, { headers: as['membro-a'].headers, data: { prefixes: [liderPath] } });
     expect((await sign('lider-a', liderPath)).ok()).toBe(true);
+    // O administrador do grupo apaga o arquivo de outra pessoa (022).
+    await api.delete(`${SUPABASE_URL}/storage/v1/object/chat`, { headers: as['lider-a'].headers, data: { prefixes: [path] } });
+    expect((await sign('lider-a', path)).ok()).toBe(false);
   });
 
   test('"Baixar meus dados" traz os grupos e as mensagens; sair do grupo tira o acesso', async () => {
@@ -1035,5 +1038,168 @@ test.describe('Chat em grupos (020)', () => {
     // A líder coloca de novo (e a conta da outra instituição continua sem entrar).
     expect(await (await rpc('lider-a', 'chat_add_members', { p_group: ids.group, p_members: [ids.membro, ids.fulanoB] })).json()).toBe(1);
     expect((await groupsOf('membro-a')).map((g) => g.id)).toContain(ids.group);
+  });
+});
+
+test.describe('Ícone do grupo do chat (021)', () => {
+  const ids = {};
+  const png = Buffer.from('89504e470d0a1a0a', 'hex');
+  const put = (who, path) =>
+    api.post(`${SUPABASE_URL}/storage/v1/object/chat/${path}`, { headers: { ...as[who].headers, 'Content-Type': 'image/png' }, data: png });
+  test.afterAll(async () => {
+    if (!api || !ids.group) return;
+    if (ids.icon) await api.delete(`${SUPABASE_URL}/storage/v1/object/chat`, { headers: as['lider-a'].headers, data: { prefixes: [ids.icon] } });
+    await api.delete(rest(`chat_groups?id=eq.${ids.group}`), { headers: as['lider-a'].headers });
+  });
+  test('só o administrador do grupo troca o ícone, na pasta do grupo; só o grupo vê', async () => {
+    const [{ id: membro }] = await get('adm-a', `members?select=id&church_id=eq.${church.a}&user_id=eq.${as['membro-a'].id}`);
+    const res = await rpc('lider-a', 'chat_create_group', { p_church: church.a, p_name: `Ícone ${Date.now()}`, p_description: null, p_locked: false, p_members: [membro] });
+    ids.group = await res.json();
+    ids.icon = `${church.a}/${ids.group}/icone-teste1.webp`;
+    await expectDenied(await put('membro-a', ids.icon), 'participante');
+    await expectDenied(await put('adm-b', ids.icon), 'outra instituição');
+    await expectDenied(await put('lider-a', `${church.a}/${ids.group}/outro-nome.webp`), 'nome fora do padrão');
+    const up = await put('lider-a', ids.icon);
+    expect(up.ok(), await up.text()).toBe(true);
+    const set = (who, icon_path) => api.patch(rest(`chat_groups?id=eq.${ids.group}`), { headers: returning(as[who].headers), data: { icon_path } });
+    expect((await set('lider-a', `${church.b}/${ids.group}/icone-x.webp`)).ok()).toBe(false); // fora da pasta do grupo
+    expect(await (await set('membro-a', ids.icon)).text()).not.toContain(ids.group);
+    expect(await (await set('lider-a', ids.icon)).json()).toEqual([expect.objectContaining({ icon_path: ids.icon })]);
+    const sign = (who) => api.post(`${SUPABASE_URL}/storage/v1/object/sign/chat/${ids.icon}`, { headers: as[who].headers, data: { expiresIn: 60 } });
+    expect((await sign('membro-a')).ok()).toBe(true);
+    for (const who of ['adm-a', 'adm-b', 'sem-igreja']) expect((await sign(who)).ok(), who).toBe(false);
+    const list = await (await rpc('membro-a', 'chat_group_list', { p_church: church.a })).json();
+    expect(list.find((g) => g.id === ids.group).icon_path).toBe(ids.icon);
+  });
+});
+
+test.describe('Projetos das salas (021)', () => {
+  const tag = `proj-${Date.now()}`;
+  const ids = {};
+  const project = (who, room_id, title, extra = {}) =>
+    api.post(rest('room_projects'), { headers: returning(as[who].headers), data: { room_id, church_id: church.a, title, ...extra } });
+  const seen = async (who) => {
+    const res = await rpc(who, 'projects_list', { p_church: church.a });
+    return res.ok() ? (await res.json()).map((p) => p.id) : [];
+  };
+  const putFile = (who, path) =>
+    api.post(`${SUPABASE_URL}/storage/v1/object/projetos/${path}`, { headers: { ...as[who].headers, 'Content-Type': 'text/plain' }, data: Buffer.from('Roteiro do projeto') });
+  const sign = (who, path) => api.post(`${SUPABASE_URL}/storage/v1/object/sign/projetos/${path}`, { headers: as[who].headers, data: { expiresIn: 60 } });
+
+  test.beforeAll(async () => {
+    if (!api) return;
+    [{ id: ids.membro }] = await get('adm-a', `members?select=id&church_id=eq.${church.a}&user_id=eq.${as['membro-a'].id}`);
+    const room = async (name) => (await (await api.post(rest('kids_rooms'), { headers: returning(as['adm-a'].headers), data: { church_id: church.a, name } })).json())[0].id;
+    ids.room = await room(`${tag} A`.slice(0, 40));
+    ids.other = await room(`${tag} B`.slice(0, 40));
+    const kid = await api.post(rest('children'), {
+      headers: returning(as['membro-a'].headers),
+      data: { church_id: church.a, name: `${tag} Filho`, birth_date: '2019-04-02', guardian_member_id: ids.membro },
+    });
+    expect(kid.ok(), await kid.text()).toBe(true);
+    ids.kid = (await kid.json())[0].id;
+    expect((await rpc('adm-a', 'room_assign', { p_child: ids.kid, p_room: ids.room })).ok()).toBe(true);
+  });
+
+  test.afterAll(async () => {
+    if (!api) return;
+    const files = await get('adm-a', `project_files?select=path&church_id=eq.${church.a}&project_id=in.(${[ids.p1, ids.p2, ids.p3].filter(Boolean).join(',') || '00000000-0000-0000-0000-000000000000'})`);
+    if (files.length) await api.delete(`${SUPABASE_URL}/storage/v1/object/projetos`, { headers: as['adm-a'].headers, data: { prefixes: files.map((f) => f.path) } });
+    for (const r of [ids.room, ids.other].filter(Boolean)) await api.delete(rest(`kids_rooms?id=eq.${r}`), { headers: as['adm-a'].headers });
+    if (ids.kid) await api.delete(rest(`children?id=eq.${ids.kid}`), { headers: as['membro-a'].headers });
+  });
+
+  test('o tutor e a liderança criam; só os pais da sala veem; avisa os pais', async () => {
+    expect((await project('membro-a', ids.room, `${tag} do membro`)).ok()).toBe(false);
+    expect((await project('adm-b', ids.room, `${tag} de fora`)).ok()).toBe(false);
+    const p1 = await project('lider-a', ids.room, `${tag} Feira`, { starts_on: '2026-11-01', due_on: '2026-11-30' });
+    expect(p1.ok(), await p1.text()).toBe(true);
+    ids.p1 = (await p1.json())[0].id;
+    expect((await project('lider-a', ids.room, `${tag} Datas`, { starts_on: '2026-11-30', due_on: '2026-11-01' })).ok()).toBe(false);
+    ids.p2 = (await (await project('lider-a', ids.other, `${tag} Outra sala`)).json())[0].id;
+    // O responsável da criança da sala vê; o da outra sala, não; outra instituição e sem igreja, nada.
+    expect(await seen('membro-a')).toContain(ids.p1);
+    expect(await seen('membro-a')).not.toContain(ids.p2);
+    for (const who of ['adm-b', 'sem-igreja']) {
+      expect(await seen(who), who).toEqual([]);
+      expect(await get(who, `room_projects?select=id&id=in.(${ids.p1},${ids.p2})`), who).toEqual([]);
+    }
+    expect(await get('membro-a', `room_projects?select=id&id=eq.${ids.p2}`)).toEqual([]);
+    // Projeto novo avisa os pais da sala.
+    const notes = await get('membro-a', `notifications?select=url&url=eq.${encodeURIComponent(`#/projetos/${ids.p1}`)}`);
+    expect(notes).toHaveLength(1);
+    // O pai não edita nem apaga; não muda o projeto de sala.
+    const edit = await api.patch(rest(`room_projects?id=eq.${ids.p1}`), { headers: returning(as['membro-a'].headers), data: { title: 'Invadido' } });
+    expect(await edit.text()).not.toContain(ids.p1);
+    const move = await api.patch(rest(`room_projects?id=eq.${ids.p1}`), { headers: returning(as['lider-a'].headers), data: { room_id: ids.other } });
+    expect(move.ok()).toBe(false);
+    const del = await api.delete(rest(`room_projects?id=eq.${ids.p1}`), { headers: returning(as['membro-a'].headers) });
+    expect(await del.text()).not.toContain(ids.p1);
+    // Tutor da outra sala: passa a criar nela.
+    expect((await api.patch(rest(`kids_rooms?id=eq.${ids.other}`), { headers: as['adm-a'].headers, data: { tutor_member_id: ids.membro } })).ok()).toBe(true);
+    const p3 = await project('membro-a', ids.other, `${tag} Do tutor`);
+    expect(p3.ok(), await p3.text()).toBe(true);
+    ids.p3 = (await p3.json())[0].id;
+    expect((await api.patch(rest(`kids_rooms?id=eq.${ids.other}`), { headers: as['adm-a'].headers, data: { tutor_member_id: null } })).ok()).toBe(true);
+    expect((await project('membro-a', ids.other, `${tag} Não é mais tutor`)).ok()).toBe(false);
+  });
+
+  test('etapas: quem cuida da sala cria e marca; os pais só leem', async () => {
+    const step = await api.post(rest('project_steps'), { headers: returning(as['lider-a'].headers), data: { project_id: ids.p1, title: 'Pesquisa', due_on: '2026-11-10' } });
+    expect(step.ok(), await step.text()).toBe(true);
+    const [{ id: stepId }] = await step.json();
+    expect((await api.post(rest('project_steps'), { headers: as['membro-a'].headers, data: { project_id: ids.p1, title: 'Do pai' } })).ok()).toBe(false);
+    const tick = (who) => api.patch(rest(`project_steps?id=eq.${stepId}`), { headers: returning(as[who].headers), data: { done_at: '2000-01-01T00:00:00Z' } });
+    expect(await (await tick('membro-a')).text()).not.toContain(stepId);
+    const [done] = await (await tick('lider-a')).json();
+    // Quem marcou e quando: o banco decide.
+    expect(done.done_by).toBe(as['lider-a'].id);
+    expect(new Date(done.done_at).getFullYear()).toBeGreaterThan(2000);
+    expect(await get('membro-a', `project_steps?select=id,done_at&project_id=eq.${ids.p1}`)).toEqual([{ id: stepId, done_at: done.done_at }]);
+    expect(await get('adm-b', `project_steps?select=id&project_id=eq.${ids.p1}`)).toEqual([]);
+  });
+
+  test('arquivos: só quem cuida da sala envia o arquivo registrado; os pais da sala abrem', async () => {
+    const add = (who) => rpc(who, 'project_add_file', { p_project: ids.p1, p_name: 'roteiro.txt', p_type: 'text/plain', p_size: 18, p_ext: 'txt' });
+    expect((await add('membro-a')).ok()).toBe(false);
+    expect((await rpc('lider-a', 'project_add_file', { p_project: ids.p1, p_name: 'grande.mp4', p_type: 'video/mp4', p_size: 30 * 1024 * 1024, p_ext: 'mp4' })).ok()).toBe(false);
+    const res = await add('lider-a');
+    expect(res.ok(), await res.text()).toBe(true);
+    const [{ file_id: fileId, path }] = await res.json();
+    expect(await get('membro-a', `project_files?select=id&id=eq.${fileId}`)).toEqual([]); // ainda não chegou
+    for (const who of ['membro-a', 'adm-b']) await expectDenied(await putFile(who, path), who);
+    await expectDenied(await putFile('lider-a', `${church.a}/${ids.p1}/qualquer.txt`), 'caminho não registrado');
+    expect((await putFile('lider-a', path)).ok()).toBe(true);
+    expect((await rpc('membro-a', 'project_file_ready', { p_file: fileId })).ok()).toBe(false);
+    expect((await rpc('lider-a', 'project_file_ready', { p_file: fileId })).ok()).toBe(true);
+    expect(await get('membro-a', `project_files?select=id,file_size&id=eq.${fileId}`)).toEqual([{ id: fileId, file_size: 18 }]);
+    expect((await sign('membro-a', path)).ok()).toBe(true);
+    for (const who of ['adm-b', 'sem-igreja']) expect((await sign(who, path)).ok(), who).toBe(false);
+    // O pai não apaga o arquivo.
+    await api.delete(`${SUPABASE_URL}/storage/v1/object/projetos`, { headers: as['membro-a'].headers, data: { prefixes: [path] } });
+    expect((await sign('lider-a', path)).ok()).toBe(true);
+  });
+
+  test('comentários: quem vê o projeto comenta; cada um apaga o seu, quem cuida da sala apaga todos', async () => {
+    const say = (who, project, body) => rpc(who, 'project_comment', { p_project: project, p_body: body });
+    const mine = await say('membro-a', ids.p1, 'Que legal! Precisa de material?');
+    expect(mine.ok(), await mine.text()).toBe(true);
+    const myId = await mine.json();
+    expect((await say('membro-a', ids.p2, 'Outra sala')).ok()).toBe(false);
+    expect((await say('adm-b', ids.p1, 'De fora')).ok()).toBe(false);
+    expect((await api.post(rest('project_comments'), { headers: as['membro-a'].headers, data: { project_id: ids.p1, church_id: church.a, body: 'Direto' } })).ok()).toBe(false);
+    const leaderSays = await (await say('lider-a', ids.p1, 'Só uma caixa de papelão.')).json();
+    const list = await (await rpc('membro-a', 'project_comment_list', { p_project: ids.p1 })).json();
+    expect(list.map((c) => [c.body, c.mine, c.can_delete])).toEqual([
+      ['Que legal! Precisa de material?', true, true],
+      ['Só uma caixa de papelão.', false, false],
+    ]);
+    expect(await (await rpc('adm-b', 'project_comment_list', { p_project: ids.p1 })).json()).toEqual([]);
+    const theirs = await api.delete(rest(`project_comments?id=eq.${leaderSays}`), { headers: returning(as['membro-a'].headers) });
+    expect(await theirs.text()).not.toContain(leaderSays);
+    const exported = await (await rpc('membro-a', 'export_my_data')).json();
+    expect(exported.comentarios_em_projetos).toEqual(expect.arrayContaining([expect.objectContaining({ projeto: `${tag} Feira`, comentario: 'Que legal! Precisa de material?' })]));
+    const mod = await api.delete(rest(`project_comments?id=eq.${myId}`), { headers: returning(as['lider-a'].headers) });
+    expect(await mod.text()).toContain(myId);
   });
 });

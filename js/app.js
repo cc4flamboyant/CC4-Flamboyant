@@ -217,6 +217,7 @@ function prefetchScreens() {
     }
     if (featureOn('avisos')) screenFetch('avisos', loadAnnouncements).catch(() => {});
     if (featureOn('salas')) screenFetch('filhos', loadMyKids).catch(() => {});
+    if (projectsOn()) screenFetch('projetos', loadProjects).catch(() => {});
     // E as conversas mais recentes, para abrirem na hora ao tocar.
     if (featureOn('chat')) screenFetch('chat', loadChatGroups).then(prefetchChatRooms).catch(() => {});
     if (canCreateGroups()) screenFetch('chat:candidatos', () => loadChatCandidates(null)).catch(() => {});
@@ -678,6 +679,10 @@ const churchRoutes = [
   [/^\/galeria\/([0-9a-f-]{36})$/, viewAlbum],
   [/^\/galeria\/([0-9a-f-]{36})\/editar$/, viewAlbumForm],
   [/^\/galeria\/([0-9a-f-]{36})\/foto\/([0-9a-f-]{36})$/, viewGalleryPhoto],
+  [/^\/projetos$/, viewProjects],
+  [/^\/projetos\/novo$/, viewProjectForm],
+  [/^\/projetos\/([0-9a-f-]{36})$/, viewProject],
+  [/^\/projetos\/([0-9a-f-]{36})\/editar$/, viewProjectForm],
   [/^\/chat$/, viewChat],
   [/^\/chat\/novo$/, viewChatForm],
   [/^\/chat\/([0-9a-f-]{36})$/, viewChatRoom],
@@ -1033,11 +1038,12 @@ async function viewChurchHome() {
     ['aniversarios', icon.cake, 'Aniversários', '#/aniversariantes'],
     ['salas', icon.child, 'Meus filhos', '#/filhos'],
     ['salas_tutor', icon.users, 'Salas', '#/salas'],
+    ['projetos', icon.book, 'Projetos', '#/projetos'],
     ['carteirinha', icon.idcard, 'Carteirinha', '#/carteirinha'],
     ['galeria', icon.image, 'Galeria', '#/galeria'],
     ['chat', icon.chat, 'Chat', '#/chat'],
     ['pix', icon.pix, 'Pix', '#/pix'],
-  ].filter(([k]) => (k === 'pix' ? offerReady() : k === 'aniversarios' ? datesOn() : k === 'salas_tutor' ? roomsTeam() : featureOn(k)));
+  ].filter(([k]) => (k === 'pix' ? offerReady() : k === 'aniversarios' ? datesOn() : k === 'salas_tutor' ? roomsTeam() : k === 'projetos' ? projectsOn() : featureOn(k)));
   $view.innerHTML = `
     <div class="page">
       ${head}
@@ -1123,6 +1129,7 @@ async function viewMenu() {
         ${datesOn() ? `<a class="menu-row" href="#/aniversariantes">${icon.cake}<span>Aniversariantes do mês</span>${icon.chevron}</a>` : ''}
         ${featureOn('salas') ? `<a class="menu-row" href="#/filhos">${icon.child}<span>Meus filhos</span>${icon.chevron}</a>` : ''}
         ${roomsTeam() ? `<a class="menu-row" href="#/salas">${icon.users}<span>${isLeaderRole(m.role) ? 'Salas das crianças' : 'Minhas salas'}</span>${icon.chevron}</a>` : ''}
+        ${projectsOn() ? `<a class="menu-row" href="#/projetos">${icon.book}<span>Projetos das salas</span>${icon.chevron}</a>` : ''}
         ${featureOn('galeria') ? `<a class="menu-row" href="#/galeria">${icon.image}<span>Galeria de fotos</span>${icon.chevron}</a>` : ''}
         ${featureOn('chat') ? `<a class="menu-row" href="#/chat">${icon.chat}<span>Chat</span>${icon.chevron}</a>` : ''}
         ${featureOn('carteirinha') ? `<a class="menu-row" href="#/carteirinha">${icon.idcard}<span>Minha carteirinha</span>${icon.chevron}</a>` : ''}
@@ -1345,6 +1352,17 @@ function helpTopics() {
            }`,
         ]]
       : []),
+    ...(projectsOn()
+      ? [[
+          'Projetos das salas',
+          `<p>Em <a href="#/projetos">Menu &gt; Projetos das salas</a> ficam os projetos das salas dos seus filhos: o que é, as datas, as etapas (✅ as que já foram feitas), os arquivos e as fotos. Só veem o tutor da sala, a liderança e os responsáveis das crianças daquela sala.</p>
+           <p>Embaixo de cada projeto, escreva um <strong>comentário</strong> para tirar dúvidas ou combinar algo. Você pode apagar os seus comentários. Projeto novo chega como aviso no sininho e no celular.</p>${
+             canCreateProjects()
+               ? `<p><strong>Se você é tutor ou da liderança:</strong> toque no <strong>+</strong> da tela de Projetos (ou em <em>Projetos</em> dentro da sala), escolha a sala e escreva o título, a descrição e as datas. Dentro do projeto, adicione as etapas (com prazo, se quiser) e marque cada uma quando ficar pronta, e envie arquivos e fotos (até 25 MB cada; os projetos da instituição de ensino podem ocupar até 200 MB). Em <em>Editar projeto</em> você muda os dados ou apaga o projeto. Você também pode apagar comentários.</p>`
+               : ''
+           }`,
+        ]]
+      : []),
     ...(features('carteirinha')
       ? [[
           'Carteirinha digital',
@@ -1440,7 +1458,7 @@ function helpTopics() {
          <li><strong>Aparência:</strong> nome, nome curto (o que aparece embaixo do ícone), logo e cores. Logo em PNG com fundo transparente fica melhor; escolha o fundo do ícone. Se a cor for clara demais, o app avisa.</li>
          <li><strong>Textos e redes sociais:</strong> boas-vindas, sobre a instituição de ensino, endereço e links.</li>
          <li><strong>Pix:</strong> o tipo e a chave Pix da instituição de ensino e o nome do recebedor. Prefira o CNPJ ou uma chave aleatória: a chave fica visível para qualquer pessoa.</li>
-         <li><strong>Funcionalidades:</strong> ligue ou desligue os aniversários, a agenda e o calendário, os avisos, Meus filhos e as salas das crianças, a carteirinha digital, a galeria de fotos, o chat em grupos e o Pix.</li>
+         <li><strong>Funcionalidades:</strong> ligue ou desligue os aniversários, a agenda e o calendário, os avisos, Meus filhos e as salas das crianças, a carteirinha digital, a galeria de fotos, o chat em grupos, os projetos das salas e o Pix.</li>
          <li><strong>Privacidade:</strong> o e-mail para pedidos sobre dados pessoais e, se quiser, um complemento da política.</li>
        </ul>
        <p>O nome e o ícone do app instalado mudam em até 15 minutos, quando o site é publicado de novo sozinho. Até lá, o botão de instalar avisa que o ícone está sendo preparado. Quem já instalou pode precisar reinstalar para ver o ícone novo.</p>`,
@@ -3389,6 +3407,7 @@ function drawParentRoom({ room, messages = [], sessions = [], present = [], kids
       <a href="#/filhos" class="back">← Meus filhos</a>
       <h1>Sala ${esc(room.name)}</h1>
       <p class="hint">${room.tutor_name ? `Tutor: ${esc(room.tutor_name)}` : 'Sem tutor no momento'}${room.description ? ` · ${esc(room.description)}` : ''}</p>
+      ${projectsOn() ? `<a class="btn" href="#/projetos?sala=${room.id}">${icon.book} Projetos da sala</a>` : ''}
       <section class="card">
         <h2>${icon.megaphone} Avisos</h2>
         ${
@@ -3688,6 +3707,7 @@ function drawRoom(ctx, id, { room, kids, notes, messages, day }) {
       <p class="hint">${room.tutor_name ? `Tutor: ${esc(room.tutor_name)}` : 'Sem tutor'}${room.description ? ` · ${esc(room.description)}` : ''}</p>
       <div class="actions-row">
         <a class="btn" href="#/salas/${id}/aviso">${icon.megaphone} Avisar os pais</a>
+        ${projectsOn() ? `<a class="btn" href="#/projetos?sala=${id}">${icon.book} Projetos</a>` : ''}
         ${leader ? `<a class="btn" href="#/salas/${id}/editar">${icon.gear} Editar sala</a>` : ''}
       </div>
 
@@ -4066,7 +4086,7 @@ async function viewChat(ctx) {
   // O "+" abre o Novo grupo na hora: a lista de pessoas já vem buscada (sem esperar a lista de grupos).
   if (canCreateGroups()) screenFetch('chat:candidatos', () => loadChatCandidates(null)).catch(() => {});
   prefetchChatRooms(screenCached('chat'));
-  await screenShow(ctx, 'chat', loadChatGroups, drawChatGroups);
+  await showWithGalleryLinks(ctx, 'chat', loadChatGroups, chatIcons, drawChatGroups, 'chat');
   if (ctx.alive()) prefetchChatRooms(screenCached('chat'));
 }
 
@@ -4091,7 +4111,9 @@ function chatPreview(g) {
   return `${esc(firstName(g.last_author || 'Ex-membro'))}: ${g.last_body ? esc(g.last_body) : `📎 ${esc(g.last_file)}`}`;
 }
 
-function drawChatGroups(groups) {
+const chatIcons = (groups) => (groups || []).map((g) => g.icon_path).filter(Boolean);
+
+function drawChatGroups(groups, urls = {}) {
   const create = canCreateGroups();
   $view.innerHTML = `
     <div class="page">
@@ -4102,7 +4124,7 @@ function drawChatGroups(groups) {
               .map(
                 (g) => `
           <a class="chat-row ${g.unread ? 'unread' : ''}" href="#/chat/${g.id}">
-            ${avatar(g.name, null)}
+            ${avatar(g.name, g.icon_path && urls[g.icon_path])}
             <span class="chat-row-text"><strong>${esc(g.name)}${g.locked ? ' <span title="Só administradores enviam">🔒</span>' : ''}</strong><small>${chatPreview(g)}</small></span>
             <span class="chat-row-side">${g.last_body || g.last_file ? `<small>${esc(notifTime(g.last_message_at))}</small>` : ''}${
               g.unread ? `<span class="chat-unread" aria-label="${g.unread} não lidas">${g.unread > 99 ? '99+' : g.unread}</span>` : ''
@@ -4121,7 +4143,7 @@ function drawChatGroups(groups) {
 // Conversa: o grupo, os participantes e as últimas mensagens (as mais antigas por último na busca).
 async function loadChatRoom(id) {
   const [g, people, msgs] = await Promise.all([
-    sb.from('chat_groups').select('id, name, description, locked').eq('id', id).maybeSingle(),
+    sb.from('chat_groups').select('id, name, description, locked, icon_path').eq('id', id).maybeSingle(),
     sb.rpc('chat_group_members', { p_group: id }),
     chatMessagesQuery(id),
   ]);
@@ -4134,7 +4156,11 @@ function chatMessagesQuery(id, before = null) {
   if (before) q = q.lt('created_at', before);
   return q;
 }
-const chatFiles = (data) => (data.messages || []).filter((m) => m.file_path && m.file_ready).map((m) => m.file_path);
+// Arquivos da conversa (e o ícone do grupo), para os links da pasta privada.
+const chatFiles = (data) => [
+  ...(data.group?.icon_path ? [data.group.icon_path] : []),
+  ...(data.messages || []).filter((m) => m.file_path && m.file_ready).map((m) => m.file_path),
+];
 const chatMe = (data) => data.people.find((p) => p.is_me) || null;
 
 async function viewChatRoom(ctx, id) {
@@ -4214,7 +4240,8 @@ function drawChatRoom(id, data, urls = {}) {
         <header class="chat-head">
           <a href="#/chat" class="chat-back" aria-label="Voltar para o chat">←</a>
           <a class="chat-title" href="#/chat/${id}/info" aria-label="Dados do grupo">
-            <strong id="chat-name"></strong><small id="chat-sub"></small>
+            <span id="chat-icon"></span>
+            <span class="chat-title-text"><strong id="chat-name"></strong><small id="chat-sub"></small></span>
           </a>
         </header>
         <div class="chat-messages" id="chat-messages"></div>
@@ -4226,6 +4253,7 @@ function drawChatRoom(id, data, urls = {}) {
     new ResizeObserver(() => room.style.setProperty('--compose-h', `${slot.offsetHeight + 8}px`)).observe(slot);
   }
   document.getElementById('chat-name').textContent = data.group.name;
+  document.getElementById('chat-icon').innerHTML = avatar(data.group.name, data.group.icon_path && urls[data.group.icon_path], 'small');
   document.getElementById('chat-sub').textContent = `${data.group.locked ? '🔒 Só administradores enviam · ' : ''}${data.people.length} ${data.people.length === 1 ? 'participante' : 'participantes'}`;
 
   const list = document.getElementById('chat-messages');
@@ -4498,13 +4526,13 @@ document.addEventListener('visibilitychange', () => {
 // Dados do grupo: participantes, administradores, bloquear e apagar.
 async function viewChatInfo(ctx, id) {
   if (!requireMemberFeature(`/chat/${id}/info`, 'chat')) return;
-  await screenShow(ctx, `chat:${id}`, () => loadChatRoom(id), (data) => drawChatInfo(id, data));
+  await showWithGalleryLinks(ctx, `chat:${id}`, () => loadChatRoom(id), (d) => (d.group?.icon_path ? [d.group.icon_path] : []), (data, urls) => drawChatInfo(id, data, urls), 'chat');
   // "Adicionar pessoas" abre na hora para o administrador do grupo.
   if (ctx.alive() && chatMe(screenCached(`chat:${id}`) || { people: [] })?.is_admin)
     screenFetch(`chat:candidatos:${id}`, () => loadChatCandidates(id)).catch(() => {});
 }
 
-function drawChatInfo(id, data) {
+function drawChatInfo(id, data, urls = {}) {
   if (!data.group) {
     $view.innerHTML = `<div class="empty"><h2>Grupo não encontrado</h2><a class="btn" href="#/chat">Voltar</a></div>`;
     return;
@@ -4515,7 +4543,18 @@ function drawChatInfo(id, data) {
   $view.innerHTML = `
     <div class="page">
       <a href="#/chat/${id}" class="back">← Conversa</a>
-      <h1>${esc(g.name)}</h1>
+      <div class="chat-info-head">
+        ${avatar(g.name, g.icon_path && urls[g.icon_path], 'big')}
+        <h1>${esc(g.name)}</h1>
+      </div>
+      ${
+        admin
+          ? `<div class="actions-row">
+              <label class="btn">${icon.image} ${g.icon_path ? 'Trocar o ícone' : 'Escolher um ícone'}<input type="file" id="group-icon" accept="image/*" hidden></label>
+              ${g.icon_path ? '<button type="button" class="btn danger-outline" id="group-icon-off">Tirar o ícone</button>' : ''}
+            </div>`
+          : ''
+      }
       ${g.description ? `<p class="pre">${esc(g.description)}</p>` : ''}
       ${
         admin
@@ -4569,8 +4608,41 @@ function drawChatInfo(id, data) {
       screenUpdate('chat', list);
     }
     toast(msg);
-    drawChatInfo(id, data);
+    drawChatInfo(id, data, knownGallery(data.group.icon_path ? [data.group.icon_path] : [], 'chat'));
   };
+  const setIcon = async (path) => {
+    const old = g.icon_path;
+    const { error } = await sb.from('chat_groups').update({ icon_path: path }).eq('id', id);
+    if (error) {
+      if (path) await sb.storage.from('chat').remove([path]).catch(() => {});
+      return toast(errorText(error), 'error');
+    }
+    if (old) sb.storage.from('chat').remove([old]).catch(() => {});
+    if (path) await galleryUrls([path], 'chat').catch(() => {});
+    after(path ? 'Ícone do grupo trocado.' : 'Ícone tirado.', (d) => (d.group.icon_path = path));
+    const list = screenCached('chat');
+    const row = list?.find((x) => x.id === id);
+    if (row) {
+      row.icon_path = path;
+      screenUpdate('chat', list);
+    }
+  };
+  document.getElementById('group-icon')?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const blob = await resizeImage(file, 256, 0.85);
+      const path = `${state.church.id}/${id}/icone-${Date.now().toString(36)}.${blob.type === 'image/webp' ? 'webp' : 'jpg'}`;
+      const { error } = await sb.storage.from('chat').upload(path, blob, { contentType: blob.type, cacheControl: '3600' });
+      if (error) throw error;
+      await setIcon(path);
+    } catch (err) {
+      toast(errorText(err), 'error');
+    }
+  });
+  document.getElementById('group-icon-off')?.addEventListener('click', async () => {
+    if (await ask('Tirar o ícone do grupo? Volta a aparecer com as iniciais do nome.')) setIcon(null);
+  });
   document.getElementById('group-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = e.currentTarget;
@@ -4776,6 +4848,400 @@ function drawChatAdd(id, people) {
     screenForget('chat');
     toast(`${data} ${data === 1 ? 'pessoa adicionada' : 'pessoas adicionadas'}.`);
     navigate(`/chat/${id}/info`);
+  });
+}
+
+// ---------------------------------------------------------------------
+// Projetos das salas: o tutor e a liderança criam (título, descrição, datas, etapas, arquivos);
+// veem o tutor, a liderança e os pais das crianças da sala, que também comentam.
+// As regras ficam no banco (supabase/021_icone_e_projetos.sql).
+// ---------------------------------------------------------------------
+const projectsOn = () => featureOn('projetos') && featureOn('salas');
+// Cuida dos projetos da sala (o banco confere de novo).
+const canEditRoomProjects = (roomId) =>
+  isLeaderRole(myRole()) || !!myMember()?.tutor_rooms?.some((r) => r.id === roomId);
+const canCreateProjects = () => projectsOn() && (isLeaderRole(myRole()) || !!myMember()?.tutor_rooms?.length);
+
+async function loadProjects() {
+  const { data, error } = await sb.rpc('projects_list', { p_church: state.church.id });
+  if (error) throw error;
+  return data;
+}
+
+function requireProjects(next) {
+  if (!requireMemberFeature(next, 'salas')) return false;
+  if (featureOn('projetos')) return true;
+  $view.innerHTML = `<div class="empty"><h2>Desligado nesta instituição de ensino</h2><a class="btn" href="#/">Voltar</a></div>`;
+  return false;
+}
+
+async function viewProjects(ctx) {
+  if (!requireProjects('/projetos')) return;
+  const room = ctx.params.get('sala');
+  await screenShow(ctx, 'projetos', loadProjects, (all) => drawProjects(all, room));
+}
+
+const projectDates = (p) => {
+  if (p.starts_on && p.due_on) return `${fmtDate(p.starts_on)} a ${fmtDate(p.due_on)}`;
+  if (p.due_on) return `Entrega: ${fmtDate(p.due_on)}`;
+  if (p.starts_on) return `Começa: ${fmtDate(p.starts_on)}`;
+  return '';
+};
+
+function drawProjects(all, room) {
+  const list = room ? all.filter((p) => p.room_id === room) : all;
+  const roomName = room ? all.find((p) => p.room_id === room)?.room_name : null;
+  const create = canCreateProjects() && (!room || canEditRoomProjects(room));
+  $view.innerHTML = `
+    <div class="page">
+      <h1>Projetos</h1>
+      ${room ? `<p class="hint">${roomName ? `Sala ${esc(roomName)} · ` : ''}<a href="#/projetos">Ver de todas as salas</a></p>` : ''}
+      ${
+        list.length
+          ? `<div class="list">${list
+              .map((p) => {
+                const pct = p.steps ? Math.round((p.steps_done / p.steps) * 100) : 0;
+                return `
+          <a class="project-card" href="#/projetos/${p.id}">
+            <span class="project-room">Sala ${esc(p.room_name)}</span>
+            <strong>${esc(p.title)}</strong>
+            ${projectDates(p) ? `<small>${esc(projectDates(p))}</small>` : ''}
+            ${p.steps ? `<span class="progress" aria-label="${p.steps_done} de ${p.steps} etapas feitas"><span style="width:${pct}%"></span></span><small>${p.steps_done} de ${p.steps} etapas feitas</small>` : ''}
+            <small class="project-counts">${p.files ? `📎 ${p.files}` : ''} ${p.comments ? `💬 ${p.comments}` : ''}</small>
+          </a>`;
+              })
+              .join('')}</div>`
+          : `<div class="empty"><p>Nenhum projeto ${room ? 'nesta sala' : 'ainda'}.${create ? ' Toque no <strong>+</strong> para criar.' : ''}</p></div>`
+      }
+      ${create ? fab(`#/projetos/novo${room ? `?sala=${encodeURIComponent(room)}` : ''}`, 'Novo projeto') : ''}
+    </div>`;
+}
+
+async function loadProject(id) {
+  const [p, steps, files, comments] = await Promise.all([
+    sb.from('room_projects').select('id, room_id, title, description, starts_on, due_on, created_at, room:kids_rooms(name)').eq('id', id).maybeSingle(),
+    sb.from('project_steps').select('id, title, due_on, done_at').eq('project_id', id).order('created_at'),
+    sb.from('project_files').select('id, path, file_name, file_type, file_size, ready').eq('project_id', id).order('created_at'),
+    sb.rpc('project_comment_list', { p_project: id }),
+  ]);
+  for (const r of [p, steps, files, comments]) if (r.error) throw r.error;
+  return { project: p.data, steps: steps.data, files: files.data.filter((f) => f.ready), comments: comments.data };
+}
+const projectFiles = (d) => (d.files || []).map((f) => f.path);
+const forgetProject = (id) => {
+  screenForget('projetos');
+  screenForget(`projeto:${id}`);
+};
+
+async function viewProject(ctx, id) {
+  if (!requireProjects(`/projetos/${id}`)) return;
+  await showWithGalleryLinks(ctx, `projeto:${id}`, () => loadProject(id), projectFiles, (d, urls) => drawProject(id, d, urls), 'projetos');
+}
+
+function projectFileHtml(f, url, edit) {
+  const name = esc(f.file_name);
+  const del = edit ? `<button type="button" class="msg-del" data-del-file="${f.id}" aria-label="Apagar ${name}" title="Apagar">${icon.trash}</button>` : '';
+  const type = f.file_type || '';
+  let body;
+  if (!url) body = `<span class="msg-doc">${icon.file}<span>${name}<small>${esc(fmtBytes(f.file_size))}</small></span></span>`;
+  else if (/^image\/(jpeg|png|webp|gif)$/.test(type)) body = `<a class="msg-img" href="${esc(url)}" target="_blank" rel="noopener"><img src="${esc(url)}" alt="${name}" loading="lazy"></a>`;
+  else if (/^video\//.test(type)) body = `<video class="msg-video" src="${esc(url)}" controls preload="metadata" playsinline></video>`;
+  else if (/^audio\//.test(type)) body = `<audio class="msg-audio" src="${esc(url)}" controls preload="none"></audio>`;
+  else body = `<a class="msg-doc" href="${esc(url)}" target="_blank" rel="noopener">${icon.file}<span>${name}<small>${esc(fmtBytes(f.file_size))} · Abrir</small></span></a>`;
+  return `<div class="project-file">${body}${del}</div>`;
+}
+
+function drawProject(id, data, urls = {}) {
+  const p = data.project;
+  if (!p) {
+    $view.innerHTML = `<div class="empty"><h2>Projeto não encontrado</h2><p>Ele pode ter sido apagado.</p><a class="btn" href="#/projetos">Voltar</a></div>`;
+    return;
+  }
+  const edit = canEditRoomProjects(p.room_id);
+  const done = data.steps.filter((s) => s.done_at).length;
+  $view.innerHTML = `
+    <div class="page">
+      <a href="#/projetos?sala=${encodeURIComponent(p.room_id)}" class="back">← Projetos</a>
+      <h1>${esc(p.title)}</h1>
+      <p class="hint">Sala ${esc(p.room?.name || '')}${projectDates(p) ? ` · ${esc(projectDates(p))}` : ''}</p>
+      ${edit ? `<div class="actions-row"><a class="btn" href="#/projetos/${id}/editar">${icon.gear} Editar projeto</a></div>` : ''}
+      ${p.description ? `<p class="pre">${linkify(p.description)}</p>` : ''}
+
+      <section class="card">
+        <h2>${icon.clipboard} Etapas${data.steps.length ? ` <small class="hint">${done} de ${data.steps.length} feitas</small>` : ''}</h2>
+        ${data.steps.length ? `<span class="progress"><span style="width:${Math.round((done / data.steps.length) * 100)}%"></span></span>` : ''}
+        ${
+          data.steps.length
+            ? `<ul class="steps">${data.steps
+                .map(
+                  (s) => `
+            <li class="${s.done_at ? 'done' : ''}">
+              ${
+                edit
+                  ? `<label class="check"><input type="checkbox" data-step="${s.id}" ${s.done_at ? 'checked' : ''}> <span>${esc(s.title)}${s.due_on ? ` <small class="hint">até ${esc(fmtDate(s.due_on))}</small>` : ''}</span></label>
+                     <button type="button" class="msg-del" data-del-step="${s.id}" aria-label="Apagar a etapa ${esc(s.title)}" title="Apagar">${icon.trash}</button>`
+                  : `<span class="step-mark" aria-hidden="true">${s.done_at ? '✅' : '⬜'}</span><span>${esc(s.title)}${s.due_on ? ` <small class="hint">até ${esc(fmtDate(s.due_on))}</small>` : ''}${s.done_at ? '<span class="sr-only"> (feita)</span>' : ''}</span>`
+              }
+            </li>`,
+                )
+                .join('')}</ul>`
+            : '<p class="hint">Nenhuma etapa ainda.</p>'
+        }
+        ${
+          edit
+            ? `<form class="step-form" id="step-form">
+                <input name="title" required maxlength="200" placeholder="Nova etapa" aria-label="Nova etapa">
+                <input name="due_on" type="date" aria-label="Prazo da etapa (opcional)">
+                <button class="btn">Adicionar</button>
+              </form>`
+            : ''
+        }
+      </section>
+
+      <section class="card">
+        <h2>${icon.image} Arquivos e fotos</h2>
+        ${data.files.length ? `<div class="project-files">${data.files.map((f) => projectFileHtml(f, urls[f.path], edit)).join('')}</div>` : '<p class="hint">Nenhum arquivo ainda.</p>'}
+        ${
+          edit
+            ? `<label class="btn">${icon.upload} Adicionar arquivos<input type="file" id="project-files" accept="${CHAT_ACCEPT}" multiple hidden></label>
+               <p class="hint" id="project-status" aria-live="polite">Fotos, vídeos, áudios e documentos de até 25 MB.</p>`
+            : ''
+        }
+      </section>
+
+      <section class="card">
+        <h2>${icon.chat} Comentários</h2>
+        ${
+          data.comments.length
+            ? `<div class="comments">${data.comments
+                .map(
+                  (c) => `
+            <article class="comment">
+              <strong>${esc(c.author_name)}</strong> <small class="hint">${esc(fmtWhen(c.created_at))}</small>
+              ${c.can_delete ? `<button type="button" class="msg-del" data-del-comment="${c.id}" aria-label="Apagar comentário" title="Apagar">${icon.trash}</button>` : ''}
+              <p class="pre">${linkify(c.body)}</p>
+            </article>`,
+                )
+                .join('')}</div>`
+            : '<p class="hint">Nenhum comentário ainda.</p>'
+        }
+        <form class="form" id="comment-form">
+          <label>Escreva um comentário<textarea name="body" required maxlength="2000" rows="2"></textarea></label>
+          <button class="btn primary">Comentar</button>
+        </form>
+      </section>
+    </div>`;
+
+  // Mudança feita aqui: guarda e redesenha na hora (o banco já respondeu).
+  const save = () => {
+    screenUpdate(`projeto:${id}`, data);
+    screenForget('projetos');
+    drawProject(id, data, knownGallery(projectFiles(data), 'projetos'));
+  };
+  $view.querySelectorAll('[data-step]').forEach(
+    (b) =>
+      (b.onchange = async () => {
+        const step = data.steps.find((s) => s.id === b.dataset.step);
+        const { data: rows, error } = await sb
+          .from('project_steps')
+          .update({ done_at: b.checked ? new Date().toISOString() : null })
+          .eq('id', step.id)
+          .select('id, title, due_on, done_at');
+        if (error || !rows?.length) {
+          b.checked = !b.checked;
+          return toast(error ? errorText(error) : 'Você não tem permissão para isso.', 'error');
+        }
+        Object.assign(step, rows[0]);
+        save();
+      }),
+  );
+  $view.querySelectorAll('[data-del-step]').forEach(
+    (b) =>
+      (b.onclick = async () => {
+        if (!(await ask('Apagar esta etapa?'))) return;
+        const { error } = await sb.from('project_steps').delete().eq('id', b.dataset.delStep);
+        if (error) return toast(errorText(error), 'error');
+        data.steps = data.steps.filter((s) => s.id !== b.dataset.delStep);
+        save();
+      }),
+  );
+  document.getElementById('step-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.currentTarget;
+    const { data: rows, error } = await sb
+      .from('project_steps')
+      .insert({ project_id: id, title: f.title.value.trim(), due_on: f.due_on.value || null })
+      .select('id, title, due_on, done_at');
+    if (error) return toast(errorText(error), 'error');
+    data.steps.push(rows[0]);
+    save();
+  });
+  $view.querySelectorAll('[data-del-file]').forEach(
+    (b) =>
+      (b.onclick = async () => {
+        const file = data.files.find((x) => x.id === b.dataset.delFile);
+        if (!file || !(await ask(`Apagar o arquivo "${file.file_name}"?`))) return;
+        await sb.storage.from('projetos').remove([file.path]).catch(() => {});
+        const { error } = await sb.from('project_files').delete().eq('id', file.id);
+        if (error) return toast(errorText(error), 'error');
+        data.files = data.files.filter((x) => x.id !== file.id);
+        save();
+      }),
+  );
+  document.getElementById('project-files')?.addEventListener('change', async (e) => {
+    const files = [...e.target.files];
+    e.target.value = '';
+    if (!files.length) return;
+    const status = document.getElementById('project-status');
+    let sent = 0;
+    let stop = null;
+    for (const [i, file] of files.entries()) {
+      if (status) status.textContent = `Enviando ${i + 1} de ${files.length}…`;
+      try {
+        data.files.push(await uploadProjectFile(id, file));
+        sent++;
+      } catch (err) {
+        stop = errorText(err);
+        if (/espaço/.test(stop)) break;
+      }
+    }
+    await galleryUrls(projectFiles(data), 'projetos').catch(() => {});
+    if (location.hash === `#/projetos/${id}`) save();
+    if (stop) toast(sent ? `${sent} ${sent === 1 ? 'arquivo enviado' : 'arquivos enviados'}. ${stop}` : stop, 'error');
+    else toast(`${sent} ${sent === 1 ? 'arquivo enviado' : 'arquivos enviados'}.`);
+  });
+  $view.querySelectorAll('[data-del-comment]').forEach(
+    (b) =>
+      (b.onclick = async () => {
+        if (!(await ask('Apagar este comentário?'))) return;
+        const { error } = await sb.from('project_comments').delete().eq('id', b.dataset.delComment);
+        if (error) return toast(errorText(error), 'error');
+        data.comments = data.comments.filter((c) => c.id !== b.dataset.delComment);
+        save();
+      }),
+  );
+  document.getElementById('comment-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.currentTarget;
+    const body = f.body.value.trim();
+    if (!body) return;
+    const btn = f.querySelector('button.primary');
+    btn.disabled = true;
+    const { data: cid, error } = await sb.rpc('project_comment', { p_project: id, p_body: body });
+    btn.disabled = false;
+    if (error) return toast(errorText(error), 'error');
+    data.comments.push({ id: cid, author_id: myMember().id, author_name: myMember().name, body, created_at: new Date().toISOString(), mine: true, can_delete: true });
+    save();
+  });
+}
+
+// Foto reduzida no aparelho; o resto vai como está (até 25 MB). O banco registra antes e confere o espaço.
+async function uploadProjectFile(projectId, file) {
+  let blob = file;
+  let type = file.type || '';
+  let name = (file.name || 'arquivo').slice(-120);
+  if (/^image\/(jpeg|png|webp|heic|heif)$/.test(type)) {
+    try {
+      blob = await resizeImage(file, 1600, 0.82);
+      type = blob.type;
+      name = `${name.replace(/\.\w+$/, '')}.${type === 'image/webp' ? 'webp' : 'jpg'}`;
+    } catch {
+      blob = file;
+    }
+  }
+  if (!CHAT_TYPES.test(type)) throw new Error(`"${name}": esse tipo de arquivo não é aceito. Mande fotos, vídeos, áudios, PDF, documentos do Office, texto ou ZIP.`);
+  if (blob.size > CHAT_FILE_LIMIT) throw new Error(`"${name}" tem ${fmtBytes(blob.size)} e o limite é 25 MB. Para vídeos maiores, coloque o link na descrição.`);
+  const ext = (name.match(/\.([a-z0-9]{1,8})$/i)?.[1] || 'bin').toLowerCase();
+  const { data, error } = await sb.rpc('project_add_file', { p_project: projectId, p_name: name, p_type: type, p_size: blob.size, p_ext: ext });
+  if (error) throw error;
+  const [row] = data;
+  const { error: upErr } = await sb.storage.from('projetos').upload(row.path, blob, { contentType: type, cacheControl: '3600' });
+  if (upErr) {
+    await sb.from('project_files').delete().eq('id', row.file_id);
+    throw upErr;
+  }
+  const { error: readyErr } = await sb.rpc('project_file_ready', { p_file: row.file_id });
+  if (readyErr) throw readyErr;
+  return { id: row.file_id, path: row.path, file_name: name, file_type: type, file_size: blob.size, ready: true };
+}
+
+// Novo projeto (escolhendo a sala) ou editar (a sala não muda).
+async function viewProjectForm(ctx, id) {
+  if (!requireProjects(id ? `/projetos/${id}/editar` : '/projetos/novo')) return;
+  if (!canCreateProjects()) return navigate('/projetos');
+  if (id) {
+    const project = await editItem(
+      ctx,
+      screenCached(`projeto:${id}`)?.project,
+      async () => (await loadProject(id)).project,
+      () => screenForget(`projeto:${id}`),
+    );
+    if (!ctx.alive()) return;
+    if (!project || !canEditRoomProjects(project.room_id)) return navigate(`/projetos/${id}`);
+    return drawProjectForm(id, project, []);
+  }
+  await screenShow(ctx, 'projeto-salas', loadRoomsList, (rooms) =>
+    drawProjectForm(null, { room_id: ctx.params.get('sala') }, rooms.filter((r) => canEditRoomProjects(r.id))),
+  );
+}
+
+function drawProjectForm(id, p, rooms) {
+  $view.innerHTML = `
+    <form class="form page" id="project-form">
+      <a href="${id ? `#/projetos/${id}` : '#/projetos'}" class="back">← ${id ? esc(p.title) : 'Projetos'}</a>
+      <h1>${id ? 'Editar projeto' : 'Novo projeto'}</h1>
+      ${
+        id
+          ? `<p class="hint">Sala ${esc(p.room?.name || '')}</p>`
+          : rooms.length
+            ? `<label>Sala<select name="room_id" required>
+                <option value="">Escolha a sala</option>
+                ${rooms.map((r) => `<option value="${r.id}" ${r.id === p.room_id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}
+              </select></label>
+              <p class="hint">Veem o projeto: o tutor, a liderança e os responsáveis das crianças desta sala.</p>`
+            : '<p class="notice">Você ainda não cuida de nenhuma sala. A liderança escolhe o tutor de cada sala.</p>'
+      }
+      <label>Título<input name="title" required minlength="2" maxlength="120" value="${esc(p.title || '')}" placeholder="Ex.: Feira de ciências"></label>
+      <label>Descrição (opcional)<textarea name="description" maxlength="4000" rows="5" placeholder="O que é o projeto, o que as crianças vão fazer, o que os pais precisam saber">${esc(p.description || '')}</textarea></label>
+      <div class="row2">
+        <label>Começa em (opcional)<input name="starts_on" type="date" value="${esc(p.starts_on || '')}"></label>
+        <label>Entrega em (opcional)<input name="due_on" type="date" value="${esc(p.due_on || '')}"></label>
+      </div>
+      <button class="btn primary big">${id ? 'Salvar' : 'Criar projeto'}</button>
+      ${id ? '<button type="button" class="btn danger-outline" id="delete-project">Apagar projeto</button>' : '<p class="hint">Ao criar, os pais da sala recebem um aviso. Depois, dentro do projeto, você coloca as etapas, os arquivos e as fotos.</p>'}
+    </form>`;
+  const form = document.getElementById('project-form');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const values = {
+      title: form.title.value.trim(),
+      description: form.description.value.trim() || null,
+      starts_on: form.starts_on.value || null,
+      due_on: form.due_on.value || null,
+    };
+    if (values.starts_on && values.due_on && values.due_on < values.starts_on) return toast('A entrega precisa ser depois do começo.', 'error');
+    const btn = form.querySelector('button.primary');
+    btn.disabled = true;
+    const q = id
+      ? sb.from('room_projects').update(values).eq('id', id).select('id')
+      : sb.from('room_projects').insert({ ...values, room_id: form.room_id?.value, church_id: state.church.id }).select('id');
+    const { data, error } = await q;
+    btn.disabled = false;
+    if (error || !data?.length) return toast(error ? errorText(error) : 'Você não tem permissão para isso.', 'error');
+    forgetProject(data[0].id);
+    toast(id ? 'Projeto salvo.' : 'Projeto criado. Os pais da sala foram avisados.');
+    navigate(`/projetos/${data[0].id}`);
+  });
+  document.getElementById('delete-project')?.addEventListener('click', async () => {
+    if (!(await ask(`Apagar o projeto "${p.title}"? As etapas, os arquivos e os comentários também são apagados.`))) return;
+    const { data: files } = await sb.from('project_files').select('path').eq('project_id', id);
+    const paths = (files || []).map((f) => f.path);
+    for (let i = 0; i < paths.length; i += 100) await sb.storage.from('projetos').remove(paths.slice(i, i + 100)).catch(() => {});
+    const { error } = await sb.from('room_projects').delete().eq('id', id);
+    if (error) return toast(errorText(error), 'error');
+    forgetProject(id);
+    toast('Projeto apagado.');
+    navigate('/projetos');
   });
 }
 

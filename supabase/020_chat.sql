@@ -184,8 +184,8 @@ create policy "chat apaga" on storage.objects for delete to authenticated
          and (exists (select 1 from public.chat_messages x
                       where x.file_path = name and x.author_id = public.my_member_id(x.church_id))
               or exists (select 1 from public.chat_groups g
-                         where g.id::text = (storage.foldername(name))[2]
-                           and g.church_id::text = (storage.foldername(name))[1]
+                         where g.id::text = (storage.foldername(objects.name))[2]
+                           and g.church_id::text = (storage.foldername(objects.name))[1]
                            and public.chat_is_admin(g.id))));
 
 -- ---------------------------------------------------------------------
