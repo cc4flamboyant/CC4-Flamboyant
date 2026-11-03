@@ -5271,11 +5271,31 @@ async function viewProjectForm(ctx, id) {
     );
     if (!ctx.alive()) return;
     if (!project || !canEditRoomProjects(project.room_id)) return navigate(`/projetos/${id}`);
-    return drawProjectForm(id, project, []);
+    // Abre na hora com as salas guardadas (ou só a atual); as outras chegam em segundo plano.
+    drawProjectForm(id, project, editableRooms(screenCached('projeto-salas')));
+    screenFetch('projeto-salas', loadRoomsList)
+      .then((rooms) => ctx.alive() && fillProjectRooms(project, editableRooms(rooms)))
+      .catch(() => {});
+    return;
   }
   await screenShow(ctx, 'projeto-salas', loadRoomsList, (rooms) =>
-    drawProjectForm(null, { room_id: ctx.params.get('sala') }, rooms.filter((r) => canEditRoomProjects(r.id))),
+    drawProjectForm(null, { room_id: ctx.params.get('sala') }, editableRooms(rooms)),
   );
+}
+
+// Salas em que a pessoa cuida dos projetos (a liderança: todas; o tutor: as dele).
+const editableRooms = (rooms) => (rooms || []).filter((r) => canEditRoomProjects(r.id));
+
+// Ao editar: a sala atual sempre aparece, mesmo antes da lista chegar.
+function projectRoomOptions(p, rooms) {
+  const list = rooms.some((r) => r.id === p.room_id) ? rooms : [{ id: p.room_id, name: p.room?.name || 'Sala atual' }, ...rooms];
+  return list.map((r) => `<option value="${r.id}" ${r.id === p.room_id ? 'selected' : ''}>${esc(r.name)}</option>`).join('');
+}
+
+function fillProjectRooms(p, rooms) {
+  const sel = document.querySelector('#project-form select[name="room_id"]');
+  if (!sel || sel.dataset.touched) return;
+  sel.innerHTML = projectRoomOptions(p, rooms);
 }
 
 function drawProjectForm(id, p, rooms) {
@@ -5285,7 +5305,8 @@ function drawProjectForm(id, p, rooms) {
       <h1>${id ? 'Editar projeto' : 'Novo projeto'}</h1>
       ${
         id
-          ? `<p class="hint">Sala ${esc(p.room?.name || '')}</p>`
+          ? `<label>Sala<select name="room_id" required>${projectRoomOptions(p, rooms)}</select></label>
+              <p class="hint">Veem o projeto: o tutor, a liderança e os responsáveis das crianças desta sala. Trocando a sala, quem é da sala anterior deixa de ver, e os pais da sala nova são avisados.</p>`
           : rooms.length
             ? `<label>Sala<select name="room_id" required>
                 <option value="">Escolha a sala</option>
@@ -5304,6 +5325,7 @@ function drawProjectForm(id, p, rooms) {
       ${id ? '<button type="button" class="btn danger-outline" id="delete-project">Apagar projeto</button>' : '<p class="hint">Ao criar, os pais da sala recebem um aviso. Depois, dentro do projeto, você coloca as etapas, os arquivos e as fotos.</p>'}
     </form>`;
   const form = document.getElementById('project-form');
+  form.room_id?.addEventListener('change', () => (form.room_id.dataset.touched = '1'));
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const values = {
@@ -5312,6 +5334,8 @@ function drawProjectForm(id, p, rooms) {
       starts_on: form.starts_on.value || null,
       due_on: form.due_on.value || null,
     };
+    const moved = id && form.room_id.value && form.room_id.value !== p.room_id;
+    if (moved) values.room_id = form.room_id.value;
     if (values.starts_on && values.due_on && values.due_on < values.starts_on) return toast('A entrega precisa ser depois do começo.', 'error');
     const btn = form.querySelector('button.primary');
     btn.disabled = true;
@@ -5322,7 +5346,7 @@ function drawProjectForm(id, p, rooms) {
     btn.disabled = false;
     if (error || !data?.length) return toast(error ? errorText(error) : 'Você não tem permissão para isso.', 'error');
     forgetProject(data[0].id);
-    toast(id ? 'Projeto salvo.' : 'Projeto criado. Os pais da sala foram avisados.');
+    toast(moved ? 'Projeto salvo. Os pais da sala nova foram avisados.' : id ? 'Projeto salvo.' : 'Projeto criado. Os pais da sala foram avisados.');
     navigate(`/projetos/${data[0].id}`);
   });
   document.getElementById('delete-project')?.addEventListener('click', async () => {

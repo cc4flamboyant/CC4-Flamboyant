@@ -1128,11 +1128,11 @@ test.describe('Projetos das salas (021)', () => {
     // Projeto novo avisa os pais da sala.
     const notes = await get('membro-a', `notifications?select=url&url=eq.${encodeURIComponent(`#/projetos/${ids.p1}`)}`);
     expect(notes).toHaveLength(1);
-    // O pai não edita nem apaga; não muda o projeto de sala.
+    // O pai não edita, não troca de sala nem apaga.
     const edit = await api.patch(rest(`room_projects?id=eq.${ids.p1}`), { headers: returning(as['membro-a'].headers), data: { title: 'Invadido' } });
     expect(await edit.text()).not.toContain(ids.p1);
-    const move = await api.patch(rest(`room_projects?id=eq.${ids.p1}`), { headers: returning(as['lider-a'].headers), data: { room_id: ids.other } });
-    expect(move.ok()).toBe(false);
+    const move = await api.patch(rest(`room_projects?id=eq.${ids.p1}`), { headers: returning(as['membro-a'].headers), data: { room_id: ids.other } });
+    expect(await move.text()).not.toContain(ids.p1);
     const del = await api.delete(rest(`room_projects?id=eq.${ids.p1}`), { headers: returning(as['membro-a'].headers) });
     expect(await del.text()).not.toContain(ids.p1);
     // Tutor da outra sala: passa a criar nela.
@@ -1201,6 +1201,37 @@ test.describe('Projetos das salas (021)', () => {
     expect(exported.comentarios_em_projetos).toEqual(expect.arrayContaining([expect.objectContaining({ projeto: `${tag} Feira`, comentario: 'Que legal! Precisa de material?' })]));
     const mod = await api.delete(rest(`project_comments?id=eq.${myId}`), { headers: returning(as['lider-a'].headers) });
     expect(await mod.text()).toContain(myId);
+  });
+
+  test('trocar de sala (024): quem cuida das duas salas troca; a sala nova passa a ver e é avisada', async () => {
+    const move = (who, id, room_id) => api.patch(rest(`room_projects?id=eq.${id}`), { headers: returning(as[who].headers), data: { room_id } });
+    // A liderança traz o projeto da outra sala para a sala do filho do membro: ele passa a ver e é avisado.
+    expect(await seen('membro-a')).not.toContain(ids.p2);
+    const res = await move('lider-a', ids.p2, ids.room);
+    expect(res.ok(), await res.text()).toBe(true);
+    expect(await seen('membro-a')).toContain(ids.p2);
+    expect(await get('membro-a', `notifications?select=url&url=eq.${encodeURIComponent(`#/projetos/${ids.p2}`)}`)).toHaveLength(1);
+    // As etapas, os arquivos e os comentários vão junto (seguem a sala do projeto).
+    expect(await get('membro-a', `room_projects?select=id&id=eq.${ids.p2}`)).toHaveLength(1);
+    // Volta para a outra sala: deixa de ver.
+    expect((await move('lider-a', ids.p2, ids.other)).ok()).toBe(true);
+    expect(await seen('membro-a')).not.toContain(ids.p2);
+    // O tutor da outra sala não leva o projeto para uma sala que ele não cuida.
+    expect((await api.patch(rest(`kids_rooms?id=eq.${ids.other}`), { headers: as['adm-a'].headers, data: { tutor_member_id: ids.membro } })).ok()).toBe(true);
+    try {
+      expect(await (await move('membro-a', ids.p3, ids.room)).text()).not.toContain(ids.p3);
+      expect(await get('lider-a', `room_projects?select=room_id&id=eq.${ids.p3}`)).toEqual([{ room_id: ids.other }]);
+    } finally {
+      await api.patch(rest(`kids_rooms?id=eq.${ids.other}`), { headers: as['adm-a'].headers, data: { tutor_member_id: null } });
+    }
+    // Nem para a sala de outra instituição.
+    const [roomB] = await (await api.post(rest('kids_rooms'), { headers: returning(as['adm-b'].headers), data: { church_id: church.b, name: `${tag} B`.slice(0, 40) } })).json();
+    try {
+      expect((await move('lider-a', ids.p2, roomB.id)).ok()).toBe(false);
+      expect(await get('lider-a', `room_projects?select=room_id,church_id&id=eq.${ids.p2}`)).toEqual([{ room_id: ids.other, church_id: church.a }]);
+    } finally {
+      await api.delete(rest(`kids_rooms?id=eq.${roomB.id}`), { headers: as['adm-b'].headers });
+    }
   });
 });
 

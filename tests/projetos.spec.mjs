@@ -116,3 +116,27 @@ test('a entrega do projeto aparece na Agenda (lista, mês e dia) e abre o projet
   await page.locator('.day-deliveries .event-card').filter({ hasText: delivery }).click();
   await expect(page.getByRole('heading', { name: delivery })).toBeVisible();
 });
+
+test('a liderança troca o projeto de sala ao editar; o pai da sala nova passa a ver', async ({ page }) => {
+  const [{ id: church }] = await (await api.get(rest('churches?select=id&slug=eq.teste-a'), { headers: as['adm-a'].headers })).json();
+  const otherName = `${tag} Outra`.slice(0, 40);
+  const [other] = await (await api.post(rest('kids_rooms'), { headers: returning(as['adm-a'].headers), data: { church_id: church, name: otherName } })).json();
+  try {
+    const moving = `${tag} Mudando`;
+    const [proj] = await (await api.post(rest('room_projects'), { headers: returning(as['lider-a'].headers), data: { church_id: church, room_id: other.id, title: moving } })).json();
+    const parentSees = async () =>
+      (await (await api.get(rest(`room_projects?select=id&id=eq.${proj.id}`), { headers: as['membro-a'].headers })).json()).length;
+    expect(await parentSees()).toBe(0);
+
+    await openLoggedIn(page, as['lider-a'].session, `/i/teste-a/#/projetos/${proj.id}/editar`);
+    const sala = page.getByLabel('Sala');
+    await expect(sala).toHaveValue(other.id);
+    await sala.selectOption({ label: tag });
+    await page.getByRole('button', { name: 'Salvar' }).click();
+    await expect(page.getByText('Projeto salvo. Os pais da sala nova foram avisados.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: moving })).toBeVisible();
+    expect(await parentSees()).toBe(1);
+  } finally {
+    await api.delete(rest(`kids_rooms?id=eq.${other.id}`), { headers: as['adm-a'].headers });
+  }
+});
