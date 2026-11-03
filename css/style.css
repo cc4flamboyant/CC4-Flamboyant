@@ -1227,6 +1227,16 @@ body.in-chat-room.keyboard-open .tabbar { display: none; }
 }
 .icon-pick-badge svg { width: 16px; height: 16px; }
 .icon-pick:active .avatar { transform: scale(.97); }
+/* Quadrado (logo da instituição) e imagem larga (mensagem de aniversário). */
+.icon-pick.square { border-radius: 22%; }
+.icon-pick.square .icon-pick-badge { right: -6px; bottom: -6px; }
+.icon-pick.image-pick { display: block; border-radius: var(--radius); }
+.icon-pick.image-pick .icon-pick-badge { right: 8px; bottom: 8px; width: 36px; height: 36px; }
+.image-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; margin: 0; min-height: 120px;
+  border: 2px dashed var(--line); border-radius: var(--radius); color: var(--muted); text-align: center;
+}
+.image-empty svg { width: 28px; height: 28px; }
 
 /* Projetos das salas */
 .project-card { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius);
