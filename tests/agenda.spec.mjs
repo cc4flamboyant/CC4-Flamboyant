@@ -213,7 +213,9 @@ test('Meu cadastro, a ficha do membro e editar evento e aviso também abrem na h
   await page.getByRole('link', { name: 'Meu cadastro' }).click();
   await expect(page.getByLabel('Nome')).toHaveValue('Líder da A', fast);
 
-  await page.locator('#tabbar').getByRole('link', { name: 'Membros' }).click();
+  // Membros fica no Menu (no menu de baixo está o Chat).
+  await page.locator('#tabbar').getByRole('link', { name: 'Menu' }).click();
+  await page.getByRole('link', { name: 'Membros' }).click();
   await page.locator('.member-row', { hasText: 'Fulano da A' }).click();
   await expect(page.getByLabel('Nome')).toHaveValue('Fulano da A', fast);
 

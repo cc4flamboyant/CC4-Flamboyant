@@ -1203,3 +1203,45 @@ test.describe('Projetos das salas (021)', () => {
     expect(await mod.text()).toContain(myId);
   });
 });
+
+test.describe('Calendário do ano (023)', () => {
+  const ids = {};
+  const put = (who, path, type = 'application/pdf') =>
+    api.post(`${SUPABASE_URL}/storage/v1/object/calendarios/${path}`, { headers: { ...as[who].headers, 'Content-Type': type }, data: Buffer.from('%PDF-1.4 calendario') });
+  const sign = (who, path) => api.post(`${SUPABASE_URL}/storage/v1/object/sign/calendarios/${path}`, { headers: as[who].headers, data: { expiresIn: 60 } });
+  const add = (who, extra = {}) =>
+    rpc(who, 'agenda_calendar_add', { p_church: church.a, p_year: 2026, p_title: 'Calendário teste', p_type: 'application/pdf', p_size: 19, p_ext: 'pdf', ...extra });
+  test.afterAll(async () => {
+    if (!api || !ids.path) return;
+    await api.delete(`${SUPABASE_URL}/storage/v1/object/calendarios`, { headers: as['lider-a'].headers, data: { prefixes: [ids.path] } });
+    await api.delete(rest(`agenda_calendars?id=eq.${ids.id}`), { headers: as['lider-a'].headers });
+  });
+  test('só a liderança envia; os membros da instituição veem; a outra instituição, não', async () => {
+    for (const who of ['membro-a', 'adm-b', 'sem-igreja']) expect((await add(who)).ok(), who).toBe(false);
+    expect((await add('lider-a', { p_type: 'text/html' })).ok()).toBe(false);
+    expect((await add('lider-a', { p_size: 20 * 1024 * 1024 })).ok()).toBe(false);
+    const res = await add('lider-a');
+    expect(res.ok(), await res.text()).toBe(true);
+    [{ calendar_id: ids.id, path: ids.path }] = await res.json();
+    // Antes de o arquivo chegar, os membros não veem.
+    expect(await get('membro-a', `agenda_calendars?select=id&id=eq.${ids.id}`)).toEqual([]);
+    for (const who of ['membro-a', 'adm-b']) await expectDenied(await put(who, ids.path), who);
+    await expectDenied(await put('lider-a', `${church.a}/qualquer.pdf`), 'caminho não registrado');
+    expect((await put('lider-a', ids.path)).ok()).toBe(true);
+    expect((await rpc('membro-a', 'agenda_calendar_ready', { p_calendar: ids.id })).ok()).toBe(false);
+    expect((await rpc('lider-a', 'agenda_calendar_ready', { p_calendar: ids.id })).ok()).toBe(true);
+    expect(await get('membro-a', `agenda_calendars?select=id,file_size&id=eq.${ids.id}`)).toEqual([{ id: ids.id, file_size: 19 }]);
+    expect((await sign('membro-a', ids.path)).ok()).toBe(true);
+    for (const who of ['adm-b', 'sem-igreja']) {
+      expect((await sign(who, ids.path)).ok(), who).toBe(false);
+      expect(await get(who, `agenda_calendars?select=id&id=eq.${ids.id}`), who).toEqual([]);
+    }
+    // O membro não renomeia nem apaga (nem o arquivo).
+    const ren = await api.patch(rest(`agenda_calendars?id=eq.${ids.id}`), { headers: returning(as['membro-a'].headers), data: { title: 'Invadido' } });
+    expect(await ren.text()).not.toContain(ids.id);
+    const del = await api.delete(rest(`agenda_calendars?id=eq.${ids.id}`), { headers: returning(as['membro-a'].headers) });
+    expect(await del.text()).not.toContain(ids.id);
+    await api.delete(`${SUPABASE_URL}/storage/v1/object/calendarios`, { headers: as['membro-a'].headers, data: { prefixes: [ids.path] } });
+    expect((await sign('lider-a', ids.path)).ok()).toBe(true);
+  });
+});

@@ -212,7 +212,15 @@ function prefetchScreens() {
   if (!isActiveMember()) return;
   const run = () => {
     if (featureOn('agenda')) {
+      // E o calendário do ano, com o link da imagem.
+      screenFetch('calendarios', loadYearCalendars)
+        .then((all) => galleryUrls(currentCalendars(all).map((k) => k.path), 'calendarios'))
+        .catch(() => {});
       screenFetch('agenda', loadAgenda).catch(() => {});
+      // E o mês atual: a aba Agenda abre nele.
+      const month = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      const { start, end } = monthGrid(month);
+      screenFetch(`cal:${ymOf(month)}`, () => loadCalendar(isoLocal(start), isoLocal(end))).catch(() => {});
       screenFetch('eventos', loadEventDetails).catch(() => {});
     }
     if (featureOn('avisos')) screenFetch('avisos', loadAnnouncements).catch(() => {});
@@ -536,7 +544,8 @@ function renderTabbar(path) {
     ['/', icon.home, 'Início'],
     ...(featureOn('agenda') ? [['/calendario', icon.calendar, 'Agenda']] : []),
     ...(featureOn('avisos') ? [['/avisos', icon.megaphone, 'Avisos']] : []),
-    ...(isLeaderRole(myRole()) ? [['/membros', icon.users, 'Membros']] : []),
+    // O Chat no lugar de Membros (que continua no Menu). Sem o chat ligado, a liderança vê Membros.
+    ...(featureOn('chat') ? [['/chat', icon.chat, 'Chat']] : isLeaderRole(myRole()) ? [['/membros', icon.users, 'Membros']] : []),
     ['/menu', icon.menu, 'Menu'],
   ];
   const section = tabs.find(([href]) => href !== '/' && (path.startsWith(href) || (href === '/calendario' && path.startsWith('/agenda'))));
@@ -654,6 +663,8 @@ const churchRoutes = [
   [/^\/calendario$/, viewCalendar],
   [/^\/calendario\/(\d{4}-\d{2})$/, viewCalendar],
   [/^\/calendario\/dia\/(\d{4}-\d{2}-\d{2})$/, viewCalendarDay],
+  [/^\/agenda\/calendarios$/, viewYearCalendars],
+  [/^\/agenda\/calendario\/([0-9a-f-]{36})$/, viewYearCalendar],
   [/^\/agenda\/novo$/, viewEventForm],
   [/^\/agenda\/([0-9a-f-]{36})$/, viewEvent],
   [/^\/agenda\/([0-9a-f-]{36})\/editar$/, viewEventForm],
@@ -1301,6 +1312,7 @@ function helpTopics() {
       ? [[
           'Agenda',
           `<p>A aba <a href="#/calendario">Agenda</a> mostra os eventos em três vistas: <strong>Lista</strong> (os próximos 3 meses), <strong>Mês</strong> (o calendário do mês, com os aniversariantes 🎂) e <strong>Dia</strong> (os horários do dia). Toque num evento para ver os detalhes, o mapa do local e a rota pelo Google Maps ou pelo Waze.</p>
+           <p>Se a instituição de ensino colocou o <strong>calendário do ano</strong>, ele aparece num botão no topo da Agenda: toque para ver (dá para aumentar com dois dedos), baixar ou compartilhar.</p>
            <p><strong>Adicionar à agenda</strong> baixa um arquivo: abra-o para salvar na agenda do celular. Cultos que se repetem entram na agenda toda semana. Se preferir, use o botão <em>Google Agenda</em>.</p>${
              features('inscricoes')
                ? `<p><strong>Inscrições:</strong> nos eventos com inscrição (retiros, cursos), toque em <em>Quero me inscrever</em>. A confirmação chega no app e por e-mail. Se as vagas acabaram, você pode entrar na <strong>lista de espera</strong>: quando alguém cancelar, a vaga é sua automaticamente e você recebe um aviso. Se não puder ir, cancele pelo app para liberar a vaga. Ninguém vê quem mais se inscreveu.</p>`
@@ -1430,7 +1442,8 @@ function helpTopics() {
           `<p>Na <a href="#/calendario">Agenda</a>, toque no dia do calendário e no botão <strong>+</strong>, embaixo à direita (ou no <strong>+</strong> da lista). Para os eventos fixos (como uma reunião toda semana), marque <strong>Repetir toda semana</strong> (e, se quiser, até quando).</p>
            <p>Em <strong>Marcar no mapa</strong>, busque o endereço ou toque no ponto exato: quem abrir o evento vê o mapa e tem os botões de rota pelo Google Maps e pelo Waze. O mesmo vale para o endereço da instituição de ensino.</p>
            
-           <p>Escolha o <strong>lembrete</strong>: os membros com notificação ativada recebem 1 hora, 2 horas, 3 horas ou 1 dia antes. Editar ou excluir um evento que se repete vale para todas as semanas.</p>`,
+           <p>Escolha o <strong>lembrete</strong>: os membros com notificação ativada recebem 1 hora, 2 horas, 3 horas ou 1 dia antes. Editar ou excluir um evento que se repete vale para todas as semanas.</p>
+           <p><strong>Calendário do ano:</strong> no topo da Agenda, toque em <em>Calendário do ano</em> (ou <em>Gerenciar</em>) e envie a imagem ou o PDF do calendário (até 15 MB). Dá para ter mais de um no mesmo ano, como o da escola e o de provas. Os de anos que já passaram somem da Agenda sozinhos.</p>`,
         ]]
       : []),
     ...(features('salas')
@@ -2668,7 +2681,10 @@ const loadAgenda = () => fetchEvents(agendaStart(), addDays(agendaStart(), 90));
 
 async function viewAgenda(ctx) {
   if (!requireMemberFeature('/agenda', 'agenda')) return;
-  await screenShow(ctx, 'agenda', loadAgenda, (all) => drawAgenda(all));
+  await screenShow(ctx, 'agenda', loadAgenda, (all) => {
+    drawAgenda(all);
+    fillCalendarBar();
+  });
 }
 
 function drawAgenda(all) {
@@ -2684,6 +2700,7 @@ function drawAgenda(all) {
   $view.innerHTML = `
     <div class="page">
       ${agendaSwitch('lista')}
+      ${calendarBarSlot()}
       <h1>Agenda</h1>
       ${
         rows.length
@@ -2755,7 +2772,10 @@ async function viewCalendar(ctx, ym) {
   const first = ym ? new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)) - 1, 1) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   if (Number.isNaN(first.getTime())) return navigate('/calendario');
   const { start, end } = monthGrid(first);
-  await screenShow(ctx, `cal:${ymOf(first)}`, () => loadCalendar(isoLocal(start), isoLocal(end)), (d) => drawCalendar(first, d));
+  await screenShow(ctx, `cal:${ymOf(first)}`, () => loadCalendar(isoLocal(start), isoLocal(end)), (d) => {
+    drawCalendar(first, d);
+    fillCalendarBar();
+  });
 }
 
 function drawCalendar(first, { events, birthdays }) {
@@ -2767,6 +2787,7 @@ function drawCalendar(first, { events, birthdays }) {
   $view.innerHTML = `
     <div class="page calendar">
       ${agendaSwitch('mes', focus)}
+      ${calendarBarSlot()}
       <div class="cal-head">
         <a class="btn small" href="#/calendario/${prev}" aria-label="Mês anterior">‹</a>
         <h1>${esc(monthTitle(first))}</h1>
@@ -4148,7 +4169,9 @@ async function loadChatRoom(id) {
     chatMessagesQuery(id),
   ]);
   for (const r of [g, people, msgs]) if (r.error) throw r.error;
-  return { group: g.data, people: people.data || [], messages: msgs.data.reverse(), more: msgs.data.length === CHAT_PAGE };
+  // As que a pessoa acabou de apagar (esperando o Desfazer) não voltam.
+  const messages = msgs.data.reverse().filter((m) => !chatPendingDeletes.has(m.id));
+  return { group: g.data, people: people.data || [], messages, more: msgs.data.length === CHAT_PAGE };
 }
 const CHAT_FIELDS = 'id, author_id, body, file_path, file_name, file_type, file_size, file_ready, created_at';
 function chatMessagesQuery(id, before = null) {
@@ -4195,6 +4218,8 @@ function chatMessagesHtml(data, urls) {
   const me = chatMe(data);
   const names = new Map(data.people.map((p) => [p.member_id, p.name]));
   let html = data.more ? '<button type="button" class="btn chat-older" id="chat-older">Ver mensagens anteriores</button>' : '';
+  const deletable = data.messages.some((m) => (me && m.author_id === me.member_id) || me?.is_admin);
+  if (deletable) html += `<p class="hint swipe-hint chat-swipe-hint">Arraste ${me?.is_admin ? 'uma mensagem' : 'uma mensagem sua'} para a esquerda para apagar.</p>`;
   if (!data.messages.length) html += '<p class="chat-empty">Nenhuma mensagem ainda. Diga olá! 👋</p>';
   let day = '';
   let prevAuthor = null;
@@ -4208,15 +4233,17 @@ function chatMessagesHtml(data, urls) {
     const mine = !!me && m.author_id === me.member_id;
     const who = m.author_id ? names.get(m.author_id) || 'Ex-participante' : 'Ex-membro';
     const del = mine || me?.is_admin;
-    html += `
-      <div class="msg ${mine ? 'mine' : ''}" data-id="${m.id}">
+    const bubble = `
+      <div class="msg ${mine ? 'mine' : ''} ${del ? 'swipe-row' : ''}" data-id="${m.id}">
         ${!mine && prevAuthor !== (m.author_id || '-') ? `<span class="msg-author">${esc(who)}</span>` : ''}
         ${m.file_path ? chatFileHtml(m, urls[m.file_path]) : ''}
         ${m.body ? `<p class="msg-text">${linkify(m.body)}</p>` : ''}
-        <span class="msg-meta">${esc(new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }))}${
-          del ? `<button type="button" class="msg-del" data-del="${m.id}" aria-label="Apagar mensagem" title="Apagar">${icon.trash}</button>` : ''
-        }</span>
+        <span class="msg-meta">${esc(new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }))}</span>
       </div>`;
+    // Quem pode apagar arrasta a mensagem para a esquerda: o fundo vermelho aparece por trás.
+    html += del
+      ? `<div class="swipe msg-swipe ${mine ? 'mine' : ''}" data-id="${m.id}"><span class="swipe-bg" aria-hidden="true">${icon.trash} Apagar</span>${bubble}</div>`
+      : bubble;
     prevAuthor = m.author_id || '-';
   }
   return html;
@@ -4248,6 +4275,8 @@ function drawChatRoom(id, data, urls = {}) {
         <div class="chat-compose-slot" id="chat-compose"></div>
       </div>`;
     room = document.getElementById('chat-room');
+    // A lista de mensagens é a mesma enquanto a conversa está aberta: o gesto é ligado uma vez.
+    swipeLeft(document.getElementById('chat-messages'), (wrap) => chatDelete(id, wrap.dataset.id));
     // Reserva embaixo a altura do campo de escrever (que cresce com o texto e os emojis).
     const slot = document.getElementById('chat-compose');
     new ResizeObserver(() => room.style.setProperty('--compose-h', `${slot.offsetHeight + 8}px`)).observe(slot);
@@ -4261,7 +4290,6 @@ function drawChatRoom(id, data, urls = {}) {
   list.innerHTML = chatMessagesHtml(data, urls);
   if (nearBottom) window.scrollTo(0, document.documentElement.scrollHeight);
 
-  list.querySelectorAll('[data-del]').forEach((b) => (b.onclick = () => chatDelete(id, b.dataset.del)));
   document.getElementById('chat-older')?.addEventListener('click', (e) => chatOlder(id, e.currentTarget));
 
   const slot = document.getElementById('chat-compose');
@@ -4434,6 +4462,7 @@ async function chatRefresh(id) {
   const data = screenCached(`chat:${id}`);
   if (!fresh || !data || chatLive?.group !== id) return;
   // Mantém as mensagens antigas já carregadas e as que ainda estão sendo enviadas daqui.
+  fresh.messages = fresh.messages.filter((m) => !chatPendingDeletes.has(m.id));
   const known = new Set(fresh.messages.map((m) => m.id));
   const oldest = fresh.messages[0]?.created_at ?? '';
   const keep = data.messages.filter((m) => !known.has(m.id) && (m.created_at < oldest || (m.file_path && !m.file_ready)));
@@ -4445,7 +4474,8 @@ async function chatRefresh(id) {
 
 async function chatArrived(id, row) {
   const data = screenCached(`chat:${id}`);
-  if (!data || !row?.id) return;
+  // Apagada aqui há pouco (esperando o Desfazer): o aviso atrasado do envio não a traz de volta.
+  if (!data || !row?.id || chatPendingDeletes.has(row.id)) return;
   const mine = row.author_id && row.author_id === chatMe(data)?.member_id;
   if (row.file_path && !row.file_ready && !mine) return;
   // Alguém que entrou depois de a conversa abrir: busca os participantes de novo.
@@ -4477,15 +4507,34 @@ async function chatOlder(id, btn) {
   window.scrollTo(0, window.scrollY + document.documentElement.scrollHeight - before);
 }
 
+const chatPendingDeletes = new Map(); // mensagem -> espera para apagar de verdade
 async function chatDelete(id, msgId) {
   const data = screenCached(`chat:${id}`);
   const msg = data?.messages.find((m) => m.id === msgId);
-  if (!msg || !(await ask('Apagar esta mensagem para todos do grupo?'))) return;
-  if (msg.file_path) await sb.storage.from('chat').remove([msg.file_path]).catch(() => {});
-  const { error } = await sb.from('chat_messages').delete().eq('id', msgId);
-  if (error) return toast(errorText(error), 'error');
-  chatDrop(id, msgId);
-  screenForget('chat');
+  if (!msg) return false;
+  const restore = () => {
+    clearTimeout(chatPendingDeletes.get(msgId));
+    chatPendingDeletes.delete(msgId);
+    chatPut(id, msg);
+  };
+  // Tira da conversa na hora (inclusive do guardado); o banco só apaga se não desfizer.
+  data.messages = data.messages.filter((m) => m.id !== msgId);
+  screenUpdate(`chat:${id}`, data);
+  chatPendingDeletes.set(
+    msgId,
+    setTimeout(async () => {
+      chatPendingDeletes.delete(msgId);
+      if (msg.file_path) await sb.storage.from('chat').remove([msg.file_path]).catch(() => {});
+      const { error } = await sb.from('chat_messages').delete().eq('id', msgId);
+      if (error) {
+        toast(`Não foi possível apagar a mensagem. ${errorText(error)}`, 'error');
+        return chatPut(id, msg);
+      }
+      screenForget('chat');
+    }, 6000),
+  );
+  toast('Mensagem apagada.', '', { label: 'Desfazer', run: restore });
+  return true;
 }
 
 // Lidas: zera o número da conversa na lista (na hora) e avisa o banco.
@@ -5243,6 +5292,312 @@ function drawProjectForm(id, p, rooms) {
     toast('Projeto apagado.');
     navigate('/projetos');
   });
+}
+
+// ---------------------------------------------------------------------
+// Calendário do ano (imagem ou PDF) no topo da Agenda. A liderança envia; todos da
+// instituição de ensino veem (pasta privada "calendarios"). Regras: supabase/023_calendario_do_ano.sql.
+// ---------------------------------------------------------------------
+const CALENDAR_LIMIT = 15 * 1024 * 1024; // o banco confere
+
+async function loadYearCalendars() {
+  const { data, error } = await sb
+    .from('agenda_calendars')
+    .select('id, year, title, path, file_type, file_size, ready, created_at')
+    .eq('church_id', state.church.id)
+    .eq('ready', true)
+    .order('year')
+    .order('created_at');
+  if (error) throw error;
+  return data;
+}
+// Os do ano atual em diante (o guardado pode ser do ano passado).
+const currentCalendars = (all) => (all || []).filter((k) => k.year >= new Date().getFullYear());
+
+// Faixa com os calendários, acima da lista e do mês: desenha na hora com o guardado e
+// troca quando o banco responder (não atrasa a Agenda).
+const calendarBarSlot = () => '<div id="year-calendars"></div>';
+function fillCalendarBar() {
+  const draw = (all) => {
+    const el = document.getElementById('year-calendars');
+    if (!el) return;
+    const list = currentCalendars(all);
+    const leader = isLeaderRole(myRole());
+    el.innerHTML =
+      list.length || leader
+        ? `<div class="year-cals">${list
+            .map((k) => `<a class="btn small year-cal" href="#/agenda/calendario/${k.id}">${icon.calendar} ${esc(k.title)} ${k.year}</a>`)
+            .join('')}${leader ? `<a class="btn small link" href="#/agenda/calendarios">${list.length ? 'Gerenciar' : `${icon.plus} Calendário do ano`}</a>` : ''}</div>`
+        : '';
+  };
+  draw(screenCached('calendarios'));
+  screenFetch('calendarios', loadYearCalendars).then(draw).catch(() => {});
+}
+
+// Visualizador: imagem com zoom (pinça, dois toques ou os botões); PDF abre no leitor do celular.
+async function viewYearCalendar(ctx, id) {
+  if (!requireMemberFeature(`/agenda/calendario/${id}`, 'agenda')) return;
+  await showWithGalleryLinks(ctx, 'calendarios', loadYearCalendars, (all) => all.filter((k) => k.id === id).map((k) => k.path), (all, urls) =>
+    drawYearCalendar(all.find((k) => k.id === id), urls), 'calendarios');
+}
+
+function drawYearCalendar(k, urls) {
+  if (!k) {
+    $view.innerHTML = `<div class="empty"><h2>Calendário não encontrado</h2><p>Ele pode ter sido trocado.</p><a class="btn" href="#/agenda">Voltar para a Agenda</a></div>`;
+    return;
+  }
+  const url = urls[k.path];
+  const pdf = k.file_type === 'application/pdf';
+  $view.innerHTML = `
+    <div class="page">
+      <a href="#/agenda" class="back">← Agenda</a>
+      <h1>${esc(k.title)} ${k.year}</h1>
+      ${
+        pdf
+          ? `<div class="card center">
+              <p>${icon.file} O calendário está em PDF (${esc(fmtBytes(k.file_size))}).</p>
+              ${url ? `<a class="btn primary big" href="${esc(url)}" target="_blank" rel="noopener">Abrir o calendário</a>` : '<p class="hint">Carregando…</p>'}
+            </div>`
+          : `<div class="zoom-box" id="zoom-box">
+              ${url ? `<img id="zoom-img" src="${esc(url)}" alt="${esc(`${k.title} ${k.year}`)}" draggable="false">` : '<span class="thumb-wait" aria-hidden="true"></span>'}
+            </div>
+            <div class="zoom-tools">
+              <button type="button" class="btn small" id="zoom-out" aria-label="Diminuir">−</button>
+              <button type="button" class="btn small" id="zoom-reset">Tamanho original</button>
+              <button type="button" class="btn small" id="zoom-in" aria-label="Aumentar">+</button>
+            </div>
+            <p class="hint center">Use dois dedos (ou toque duas vezes) para aumentar e arrastar.</p>`
+      }
+      <div class="actions-row">
+        <button type="button" class="btn" id="cal-share">${icon.send} Compartilhar</button>
+        <button type="button" class="btn" id="cal-download">${icon.upload} Baixar</button>
+      </div>
+    </div>`;
+  if (!pdf && url) bindZoom(document.getElementById('zoom-box'), document.getElementById('zoom-img'));
+
+  const fileOf = async () => {
+    const link = (await galleryUrls([k.path], 'calendarios'))[k.path];
+    if (!link) throw new Error('Sem conexão. Tente de novo.');
+    const blob = await (await fetch(link)).blob();
+    const ext = { 'application/pdf': 'pdf', 'image/png': 'png', 'image/webp': 'webp' }[blob.type] || 'jpg';
+    return new File([blob], `${slugify(`${k.title} ${k.year}`)}.${ext}`, { type: blob.type });
+  };
+  document.getElementById('cal-download').onclick = async () => {
+    try {
+      const file = await fileOf();
+      const href = URL.createObjectURL(file);
+      const a = Object.assign(document.createElement('a'), { href, download: file.name });
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(href), 1000);
+    } catch (err) {
+      toast(errorText(err), 'error');
+    }
+  };
+  document.getElementById('cal-share').onclick = async () => {
+    try {
+      const file = await fileOf();
+      if (navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: `${k.title} ${k.year}` });
+      else document.getElementById('cal-download').click();
+    } catch (err) {
+      if (err?.name !== 'AbortError') toast(errorText(err), 'error');
+    }
+  };
+}
+
+// Zoom só dentro da caixa da imagem (a página continua sem zoom): pinça, arrastar,
+// dois toques, roda do mouse com Ctrl e os botões. Escala de 1x a 6x.
+function bindZoom(box, img) {
+  let scale = 1;
+  let x = 0;
+  let y = 0;
+  const apply = () => {
+    // Não deixa a imagem sair da caixa.
+    const maxX = (box.clientWidth * (scale - 1)) / 2;
+    const maxY = (img.offsetHeight * scale - box.clientHeight) / 2;
+    x = Math.max(-maxX, Math.min(maxX, x));
+    y = Math.max(-Math.max(0, maxY), Math.min(Math.max(0, maxY), y));
+    img.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+    box.classList.toggle('zoomed', scale > 1);
+  };
+  const zoomTo = (s) => {
+    const next = Math.max(1, Math.min(6, s));
+    x *= next / scale;
+    y *= next / scale;
+    scale = next;
+    if (scale === 1) x = y = 0;
+    apply();
+  };
+  const points = new Map();
+  let pinch = null;
+  let pan = null;
+  let lastTap = 0;
+  box.addEventListener('pointerdown', (e) => {
+    box.setPointerCapture(e.pointerId);
+    points.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (points.size === 2) {
+      const [a, b] = [...points.values()];
+      pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y), scale };
+      pan = null;
+    } else if (points.size === 1) {
+      pan = { x: e.clientX - x, y: e.clientY - y };
+      const now = Date.now();
+      if (now - lastTap < 300) zoomTo(scale > 1 ? 1 : 2.5);
+      lastTap = now;
+    }
+  });
+  box.addEventListener('pointermove', (e) => {
+    if (!points.has(e.pointerId)) return;
+    points.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && points.size === 2) {
+      const [a, b] = [...points.values()];
+      zoomTo((pinch.scale * Math.hypot(a.x - b.x, a.y - b.y)) / pinch.dist);
+    } else if (pan && scale > 1) {
+      x = e.clientX - pan.x;
+      y = e.clientY - pan.y;
+      apply();
+    }
+  });
+  const up = (e) => {
+    points.delete(e.pointerId);
+    if (points.size < 2) pinch = null;
+    if (points.size === 1) {
+      const [p] = [...points.values()];
+      pan = { x: p.x - x, y: p.y - y };
+    }
+    if (!points.size) pan = null;
+  };
+  box.addEventListener('pointerup', up);
+  box.addEventListener('pointercancel', up);
+  box.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey && scale === 1 && e.deltaY > 0) return;
+    e.preventDefault();
+    zoomTo(scale * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
+  }, { passive: false });
+  document.getElementById('zoom-in').onclick = () => zoomTo(scale * 1.5);
+  document.getElementById('zoom-out').onclick = () => zoomTo(scale / 1.5);
+  document.getElementById('zoom-reset').onclick = () => zoomTo(1);
+  img.addEventListener('load', apply);
+}
+
+// A liderança envia, renomeia e apaga os calendários (vê também os de anos anteriores).
+async function loadAllYearCalendars() {
+  const { data, error } = await sb
+    .from('agenda_calendars')
+    .select('id, year, title, path, file_type, file_size, ready, created_at')
+    .eq('church_id', state.church.id)
+    .order('year', { ascending: false })
+    .order('created_at');
+  if (error) throw error;
+  return data.filter((k) => k.ready);
+}
+
+async function viewYearCalendars(ctx) {
+  if (!requireMemberFeature('/agenda/calendarios', 'agenda')) return;
+  if (!isLeaderRole(myRole())) return navigate('/agenda');
+  await screenShow(ctx, 'calendarios:todos', loadAllYearCalendars, drawYearCalendars);
+}
+
+function drawYearCalendars(all) {
+  const y = new Date().getFullYear();
+  const typing = document.getElementById('cal-form');
+  const keep = typing ? { title: typing.title.value, year: typing.year.value } : null;
+  $view.innerHTML = `
+    <div class="page">
+      <a href="#/agenda" class="back">← Agenda</a>
+      <h1>Calendário do ano</h1>
+      <p class="hint">Aparece no topo da Agenda para todos da instituição de ensino. Os de anos que já passaram somem da Agenda (ficam aqui para você apagar).</p>
+      ${
+        all.length
+          ? `<div class="list">${all
+              .map(
+                (k) => `
+          <div class="menu-row cal-row">
+            ${k.file_type === 'application/pdf' ? icon.file : icon.image}
+            <span><a href="#/agenda/calendario/${k.id}"><strong>${esc(k.title)} ${k.year}</strong></a>
+              <small>${k.file_type === 'application/pdf' ? 'PDF' : 'Imagem'} · ${esc(fmtBytes(k.file_size))}${k.year < y ? ' · ano que passou' : ''}</small></span>
+            <button type="button" class="btn small danger-outline" data-del="${k.id}">Apagar</button>
+          </div>`,
+              )
+              .join('')}</div>`
+          : '<p class="empty">Nenhum calendário ainda.</p>'
+      }
+      <form class="form card" id="cal-form">
+        <h2>Enviar um calendário</h2>
+        <label>Nome<input name="title" required minlength="2" maxlength="80" value="Calendário escolar"></label>
+        <label>Ano<select name="year">${[y - 1, y, y + 1].map((n) => `<option value="${n}" ${n === y ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        <label>Imagem ou PDF (até 15 MB)<input type="file" name="file" accept="image/jpeg,image/png,image/webp,image/heic,application/pdf" required></label>
+        <p class="hint">Dica: use a imagem ou o PDF do calendário que a escola já tem. Se for foto, tire de frente e com boa luz.</p>
+        <button class="btn primary">Enviar</button>
+        <p class="hint" id="cal-status" aria-live="polite"></p>
+      </form>
+    </div>`;
+  const form = document.getElementById('cal-form');
+  if (keep) {
+    form.title.value = keep.title;
+    form.year.value = keep.year;
+  }
+  const changed = () => {
+    screenForget('calendarios');
+    screenForget('calendarios:todos');
+    render();
+  };
+  $view.querySelectorAll('[data-del]').forEach(
+    (b) =>
+      (b.onclick = async () => {
+        const k = all.find((x) => x.id === b.dataset.del);
+        if (!k || !(await ask(`Apagar "${k.title} ${k.year}"? Ele some da Agenda de todos.`))) return;
+        await sb.storage.from('calendarios').remove([k.path]).catch(() => {});
+        const { error } = await sb.from('agenda_calendars').delete().eq('id', k.id);
+        if (error) return toast(errorText(error), 'error');
+        toast('Calendário apagado.');
+        changed();
+      }),
+  );
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const file = form.file.files[0];
+    if (!file) return;
+    const btn = form.querySelector('button.primary');
+    const status = document.getElementById('cal-status');
+    btn.disabled = true;
+    status.textContent = 'Enviando…';
+    try {
+      await uploadYearCalendar(file, Number(form.year.value), form.title.value.trim());
+      toast('Calendário enviado. Ele já aparece na Agenda.');
+      form.reset();
+      changed();
+    } catch (err) {
+      toast(errorText(err), 'error');
+    } finally {
+      btn.disabled = false;
+      status.textContent = '';
+    }
+  });
+}
+
+// Imagem: reduzida para 2.400 pixels (os números dos dias continuam legíveis no zoom). PDF: como está.
+async function uploadYearCalendar(file, year, title) {
+  let blob = file;
+  let type = file.type;
+  if (type !== 'application/pdf') {
+    if (!/^image\//.test(type)) throw new Error('Envie uma imagem (JPG, PNG) ou um PDF.');
+    blob = await resizeImage(file, 2400, 0.88);
+    type = blob.type;
+  }
+  if (blob.size > CALENDAR_LIMIT) throw new Error(`O arquivo tem ${fmtBytes(blob.size)} e o limite é 15 MB.`);
+  const ext = { 'application/pdf': 'pdf', 'image/webp': 'webp', 'image/png': 'png' }[type] || 'jpg';
+  const { data, error } = await sb.rpc('agenda_calendar_add', { p_church: state.church.id, p_year: year, p_title: title, p_type: type, p_size: blob.size, p_ext: ext });
+  if (error) throw error;
+  const [row] = data;
+  const { error: upErr } = await sb.storage.from('calendarios').upload(row.path, blob, { contentType: type, cacheControl: '3600' });
+  if (upErr) {
+    await sb.from('agenda_calendars').delete().eq('id', row.calendar_id);
+    throw upErr;
+  }
+  const { error: readyErr } = await sb.rpc('agenda_calendar_ready', { p_calendar: row.calendar_id });
+  if (readyErr) throw readyErr;
 }
 
 // ---------------------------------------------------------------------

@@ -37,7 +37,7 @@ test.afterAll(async () => {
 
 test('a liderança cria o grupo, escolhe quem participa e escreve com emoji, link e anexo', async ({ page }) => {
   await openLoggedIn(page, as['lider-a'].session, '/i/teste-a/#/menu');
-  await page.getByRole('link', { name: 'Chat' }).click();
+  await page.locator('#tabbar').getByRole('link', { name: 'Chat' }).click();
   await expect(page.getByRole('heading', { name: 'Chat', level: 1 })).toBeVisible();
   await page.getByRole('link', { name: 'Novo grupo' }).click();
   await page.getByLabel('Nome do grupo').fill(name);
@@ -62,6 +62,31 @@ test('a liderança cria o grupo, escolhe quem participa e escreve com emoji, lin
   await expect(msg).toContainText('Bom dia, turma 🎓');
   await expect(msg.getByRole('link', { name: 'www.exemplo.com.br' })).toHaveAttribute('href', 'https://www.exemplo.com.br');
   await expect(box).toHaveValue('');
+
+  // Arrastar a própria mensagem para a esquerda apaga, com Desfazer.
+  const drag = async (loc) => {
+    const b = await loc.boundingBox();
+    await page.mouse.move(b.x + b.width - 10, b.y + b.height / 2);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i++) await page.mouse.move(b.x + b.width - 10 - i * b.width * 0.08, b.y + b.height / 2);
+    await page.mouse.up();
+  };
+  await box.fill('Mensagem para apagar');
+  await page.getByRole('button', { name: 'Enviar' }).click();
+  const temp = page.locator('.msg-swipe').filter({ hasText: 'Mensagem para apagar' });
+  await expect(temp).toBeVisible();
+  await drag(temp.locator('.msg'));
+  await expect(page.getByText('Mensagem apagada.')).toBeVisible();
+  await expect(temp).toBeHidden();
+  await page.getByRole('button', { name: 'Desfazer' }).click();
+  await expect(temp).toBeVisible();
+  await drag(temp.locator('.msg'));
+  await expect(temp).toBeHidden();
+  // Depois dos 6 segundos do Desfazer, sai do banco (para todos).
+  const g0 = await group();
+  await expect
+    .poll(async () => (await (await api.get(rest(`chat_messages?select=id&group_id=eq.${g0.id}&body=eq.${encodeURIComponent('Mensagem para apagar')}`), { headers: as['lider-a'].headers })).json()).length, { timeout: 15000 })
+    .toBe(0);
 
   // Anexo (documento): aparece como arquivo para abrir.
   await page.locator('#chat-file').setInputFiles({ name: 'lista.txt', mimeType: 'text/plain', buffer: Buffer.from('Material da semana') });

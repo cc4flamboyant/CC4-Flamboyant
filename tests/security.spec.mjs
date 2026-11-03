@@ -207,6 +207,21 @@ test.describe('Banco: visitante sem login (projetos das salas, 021)', () => {
   });
 });
 
+test.describe('Banco: visitante sem login (calendário do ano, 023)', () => {
+  test('não lê nem envia calendários', async ({ request }) => {
+    const res = await request.get(rest('agenda_calendars?select=*'), { headers });
+    if (res.ok()) expect(await res.json()).toEqual([]);
+    const calls = {
+      agenda_calendar_add: { p_church: UUID, p_year: 2026, p_title: 'x', p_type: 'application/pdf', p_size: 1, p_ext: 'pdf' },
+      agenda_calendar_ready: { p_calendar: UUID },
+      agenda_on: { p_church: UUID },
+    };
+    for (const [fn, data] of Object.entries(calls)) expect((await rpc(request, fn, data)).ok(), fn).toBe(false);
+    const list = await request.post(`${SUPABASE_URL}/storage/v1/object/list/calendarios`, { headers: storageHeaders, data: { prefix: '', limit: 10 } });
+    if (list.ok()) expect(await list.json()).toEqual([]);
+  });
+});
+
 // Teste de vulnerabilidade (016): funções de gatilho e de cálculo ficam fora do alcance de quem não
 // está logado. As das regras de leitura continuam (respondem "não" para quem não está logado).
 test.describe('Banco: visitante sem login (funções que ele não usa, 016)', () => {

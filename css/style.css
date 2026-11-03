@@ -1076,3 +1076,23 @@ body:not(.has-tabbar) .chat-compose-slot { bottom: env(safe-area-inset-bottom); 
 .comment p { margin: 4px 0 0; overflow-wrap: anywhere; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* Calendário do ano: botões no topo da Agenda e o visualizador com zoom */
+.year-cals { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
+.year-cal { background: var(--brand-soft); border-color: transparent; color: var(--link); font-weight: 600; }
+.zoom-box { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: #fff;
+  touch-action: none; user-select: none; max-height: 72vh; display: grid; place-items: center; }
+.zoom-box img { display: block; width: 100%; height: auto; transform-origin: center center; will-change: transform; -webkit-user-drag: none; }
+.zoom-box.zoomed { cursor: grab; }
+.zoom-tools { display: flex; justify-content: center; gap: 8px; margin: 10px 0 4px; }
+.cal-row a { color: var(--ink); text-decoration: none; }
+
+/* Mensagem que a pessoa pode apagar: arrastar para a esquerda (o fundo vermelho fica por trás do balão). */
+.msg-swipe { align-self: flex-start; max-width: 82%; border-radius: 14px 14px 14px 4px; flex: none; }
+.msg-swipe.mine { align-self: flex-end; border-radius: 14px 14px 4px 14px; }
+.msg-swipe .msg { max-width: none; }
+.msg-swipe .swipe-bg { padding-right: 12px; font-size: .85rem; }
+.msg-swipe .msg.mine { background: color-mix(in srgb, var(--brand) 12%, var(--surface)); }
+.chat-swipe-hint { text-align: center; }
+/* O vermelho só aparece enquanto arrasta (parado, não vaza pelos cantos do balão). */
+.msg-swipe:not(:has(.dragging)):not(.removing) .swipe-bg { visibility: hidden; }
