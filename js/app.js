@@ -1316,7 +1316,7 @@ async function viewMyData() {
 
       <section class="card">
         <h2>${icon.upload} Baixar meus dados</h2>
-        <p>Um arquivo com tudo o que o app guarda sobre você: os seus cadastros em cada instituição de ensino, os seus filhos e as salas deles, os dados da carteirinha, os álbuns que publicou e os pedidos para tirar fotos, as suas reações aos avisos, as notificações, as mensagens enviadas, os aparelhos com notificação e o que você publicou.</p>
+        <p>Um arquivo com tudo o que o app guarda sobre você: os seus cadastros em cada instituição de ensino, os seus filhos e as salas deles, os dados da carteirinha, os álbuns que publicou e os pedidos para tirar fotos, as suas reações aos avisos e no chat, os grupos do chat e as mensagens que você mandou neles, os comentários nos projetos, as notificações, as mensagens enviadas, os aparelhos com notificação e o que você publicou.</p>
         <button class="btn" id="export">Baixar arquivo</button>
         <p class="hint">Para corrigir algum dado, use "Meu cadastro" ou fale com a secretaria da instituição de ensino.</p>
       </section>

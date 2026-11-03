@@ -1136,6 +1136,11 @@ test.describe('Quem reagiu e reações no chat (027)', () => {
     // Tirar a reação.
     expect((await react('lider-a', null)).ok()).toBe(true);
     expect((await list('membro-a')).map((r) => r.emoji)).toEqual(['😂']);
+    // "Baixar meus dados" traz a reação (028), sem o texto da mensagem (é de outra pessoa).
+    const exported = await (await rpc('membro-a', 'export_my_data')).json();
+    const mineHere = exported.reacoes_no_chat.filter((r) => r.grupo.startsWith('Reações '));
+    expect(mineHere).toEqual(expect.arrayContaining([expect.objectContaining({ reacao: '😂' })]));
+    expect(JSON.stringify(mineHere)).not.toContain('Reaja aqui');
     // O membro sai do grupo: a reação dele some.
     const out = await rpc('membro-a', 'chat_remove_member', { p_group: ids.group, p_member: membro });
     expect(out.ok(), await out.text()).toBe(true);
