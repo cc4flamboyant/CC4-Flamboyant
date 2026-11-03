@@ -18,8 +18,17 @@ const TYPES = {
   '.json': 'application/json',
 };
 
+// Só nos testes: POST /__teste/sw-versao "publica" uma versão nova do app (o sw.js passa a vir
+// diferente), para testar a atualização sozinha do app aberto.
+let swVersion = 0;
+
 createServer(async (req, res) => {
   let path = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+  if (req.method === 'POST' && path === '/__teste/sw-versao') {
+    swVersion++;
+    res.writeHead(204).end();
+    return;
+  }
   if (path.endsWith('/')) path += 'index.html';
   const file = normalize(join(root, path));
   if (!file.startsWith(root + sep)) {
@@ -33,7 +42,8 @@ createServer(async (req, res) => {
       return;
     }
     res.writeHead(200, { 'Content-Type': TYPES[extname(file)] || 'application/octet-stream' });
-    res.end(await readFile(file));
+    const body = await readFile(file);
+    res.end(swVersion && path.endsWith('/sw.js') ? Buffer.concat([body, Buffer.from(`\n// versão de teste ${swVersion}\n`)]) : body);
   } catch {
     res.writeHead(404, { 'Content-Type': TYPES['.html'] });
     res.end(await readFile(join(root, '404.html')));

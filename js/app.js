@@ -7782,7 +7782,34 @@ document.addEventListener('click', (e) => {
 // assim o Android mostra os avisos pelo app da instituição de ensino, como no Desapega. Com o da raiz do site,
 // o aviso ia para o Chrome e sumia em silêncio quando o Chrome não tinha permissão no celular.
 const SW_SCOPE = SLUG ? PAGE_URL.replace(/\/?$/, '/') : ROOT_URL;
-if ('serviceWorker' in navigator) navigator.serviceWorker.register(new URL('sw.js', ROOT_URL).href, { scope: SW_SCOPE }).catch(() => {});
+// Versão nova do app: procura sozinho ao voltar para o app (e de meia em meia hora). Quando ela
+// assume, recarrega na hora; se a pessoa estiver escrevendo ou com uma janela aberta, pergunta antes.
+if ('serviceWorker' in navigator) {
+  let hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker
+    .register(new URL('sw.js', ROOT_URL).href, { scope: SW_SCOPE })
+    .then((reg) => {
+      const check = () => reg.update().catch(() => {});
+      document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && check());
+      setInterval(check, 30 * 60 * 1000);
+    })
+    .catch(() => {});
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    // Primeira vez no aparelho: a página já é a versão nova (as próximas trocas recarregam).
+    if (!hadController) return void (hadController = true);
+    if (reloading) return;
+    const reload = () => {
+      reloading = true;
+      location.reload();
+    };
+    const typing = [...document.querySelectorAll('#view input:not([type=hidden]):not([type=checkbox]):not([type=radio]), #view textarea')].some(
+      (f) => f === document.activeElement && f.value,
+    );
+    if (!typing && !document.querySelector('dialog[open], .video-viewer')) return reload();
+    toast('Há uma versão nova do app.', '', { label: 'Atualizar', run: reload });
+  });
+}
 let quickStarted = null;
 boot().catch((e) => {
   console.error(e);

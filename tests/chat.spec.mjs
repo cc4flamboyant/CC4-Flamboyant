@@ -310,6 +310,25 @@ test('as fotos do chat ficam guardadas no aparelho (aparecem na hora da próxima
   await ctx.close();
 });
 
+test('versão nova do app: ao voltar para o app ela é buscada e a tela recarrega sozinha', async ({ browser }) => {
+  const ctx = await browser.newContext({ ...test.info().project.use, baseURL: 'http://localhost:4173/', serviceWorkers: 'allow' });
+  const page = await ctx.newPage();
+  await openLoggedIn(page, as['lider-a'].session, '/i/teste-a/#/chat');
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) await page.reload();
+  await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
+  // Marca a página atual: some quando ela recarregar.
+  await page.evaluate(() => (window.__versaoAntiga = true));
+  // "Publica" uma versão nova: o sw.js passa a vir diferente.
+  const pub = await page.request.post('http://localhost:4173/__teste/sw-versao');
+  expect(pub.status()).toBe(204);
+  // Voltar para o app (a aba fica visível de novo) procura a versão nova.
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await expect.poll(() => page.evaluate(() => window.__versaoAntiga === undefined).catch(() => false), { timeout: 20000 }).toBe(true);
+  await expect(page.getByRole('heading', { name: 'Chat', level: 1 })).toBeVisible();
+  await ctx.close();
+});
+
 test('dentro da conversa: sem a barra do app; o voltar e o nome do grupo ficam presos no alto', async ({ page }) => {
   const g = await group();
   await openLoggedIn(page, as['lider-a'].session, `/i/teste-a/#/chat/${g.id}`);
