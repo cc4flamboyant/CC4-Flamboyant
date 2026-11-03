@@ -87,6 +87,8 @@ test('a liderança edita o calendário: nome e ano, e troca o arquivo', async ({
   await expect(rows).toContainText(`${title} ${year + 1}`);
   // Volta o ano e troca o arquivo: o novo entra no lugar (continua um só).
   await rows.getByRole('link', { name: 'Editar' }).click();
+  // A lista também tem um campo "Ano" (Enviar um calendário): espera o formulário de editar abrir.
+  await expect(page.getByRole('heading', { name: 'Editar calendário' })).toBeVisible();
   await page.getByLabel('Ano').selectOption(String(year));
   await page.setViewportSize({ width: 800, height: 600 });
   const shot = await page.screenshot();
