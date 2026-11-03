@@ -421,6 +421,8 @@ const icon = {
   pin: '<svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
   link: '<svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>',
   chevron: '<svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>',
+  back: '<svg viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>',
+  expand: '<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
   users: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.3a6.5 6.5 0 0 1 3.5 5.7"/></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
   trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>',
@@ -4285,10 +4287,111 @@ function chatFileHtml(m, url) {
   const type = m.file_type || '';
   if (/^image\/(jpeg|png|webp|gif)$/.test(type))
     return `<a class="msg-img" href="${esc(url)}" target="_blank" rel="noopener"><img src="${esc(url)}" alt="${name}" loading="lazy"></a>`;
-  if (/^video\//.test(type)) return `<video class="msg-video" src="${esc(url)}" controls preload="metadata" playsinline></video>`;
+  // Vídeo: a tela cheia é a do app (com Voltar e o campo de escrever), não a do celular.
+  if (/^video\//.test(type))
+    return `<span class="msg-video-wrap"><video class="msg-video" src="${esc(url)}" controls controlslist="nofullscreen" disablepictureinpicture preload="metadata" playsinline></video><button type="button" class="msg-video-open" data-video="${esc(url)}" aria-label="Ver o vídeo em tela cheia">${icon.expand}</button></span>`;
   if (/^audio\//.test(type)) return `<audio class="msg-audio" src="${esc(url)}" controls preload="none"></audio>`;
   return `<a class="msg-doc" href="${esc(url)}" target="_blank" rel="noopener">${icon.file}<span>${name}<small>${esc(fmtBytes(m.file_size))} · Abrir</small></span></a>`;
 }
+
+// ---------------------------------------------------------------------
+// Vídeo do chat em tela cheia, dentro do app: Voltar flutuando no alto (o voltar do
+// celular também fecha) e, embaixo, o campo para escrever sobre o vídeo no grupo.
+// ---------------------------------------------------------------------
+let chatViewer = null;
+
+function openChatVideo(groupId, url, from = null) {
+  closeChatVideo(false);
+  const data = screenCached(`chat:${groupId}`);
+  const me = data && chatMe(data);
+  const canSend = !!me && (!data.group?.locked || me.is_admin);
+  const el = document.createElement('div');
+  el.className = 'video-viewer';
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-modal', 'true');
+  el.setAttribute('aria-label', 'Vídeo');
+  el.innerHTML = `
+    <button type="button" class="viewer-back" aria-label="Voltar para a conversa">${icon.back} <span>Voltar</span></button>
+    <video src="${esc(url)}" controls controlslist="nofullscreen" disablepictureinpicture playsinline autoplay></video>
+    ${
+      canSend
+        ? `<form class="viewer-compose" autocomplete="off">
+            <textarea name="body" rows="1" maxlength="4000" placeholder="Escreva sobre o vídeo" aria-label="Escreva sobre o vídeo"></textarea>
+            <button class="chat-btn send" aria-label="Enviar">${icon.send}</button>
+          </form>`
+        : ''
+    }`;
+  document.body.appendChild(el);
+  document.documentElement.classList.add('viewer-open');
+  const video = el.querySelector('video');
+  // Continua de onde o vídeo da conversa estava.
+  if (from) {
+    video.currentTime = from.currentTime || 0;
+    from.pause();
+  }
+  video.play?.()?.catch(() => {});
+  // O voltar do celular fecha o vídeo (e não sai da conversa).
+  history.pushState({ chatVideo: true }, '');
+  chatViewer = { el, groupId, pushed: true };
+  el.querySelector('.viewer-back').onclick = () => closeChatVideo();
+  const form = el.querySelector('.viewer-compose');
+  if (!form) return;
+  const text = form.body;
+  text.addEventListener('input', () => {
+    text.style.height = 'auto';
+    text.style.height = `${Math.min(text.scrollHeight, 120)}px`;
+  });
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = text.value.trim();
+    if (!body) return text.focus();
+    const btn = form.querySelector('.send');
+    btn.disabled = true;
+    const error = await chatSendText(groupId, body);
+    btn.disabled = false;
+    if (error) return toast(errorText(error), 'error');
+    text.value = '';
+    text.style.height = 'auto';
+    toast('Mensagem enviada.');
+  });
+}
+
+// back: false quando o próprio voltar do celular já tirou o passo do histórico.
+function closeChatVideo(back = true) {
+  if (!chatViewer) return;
+  const { el, pushed } = chatViewer;
+  chatViewer = null;
+  el.querySelector('video')?.pause();
+  el.remove();
+  document.documentElement.classList.remove('viewer-open');
+  if (back && pushed && history.state?.chatVideo) history.back();
+}
+window.addEventListener('popstate', () => closeChatVideo(false));
+// Trocou de tela por outro caminho (link, notificação): o vídeo fecha junto.
+window.addEventListener('hashchange', () => closeChatVideo(false));
+document.addEventListener('keydown', (e) => e.key === 'Escape' && closeChatVideo());
+
+// Se o celular abrir a tela cheia dele mesmo assim (toque duplo no vídeo, iPhone),
+// sai dela e abre a do app.
+function chatVideoTakeOver(video) {
+  // Já na tela cheia do app: a do celular não acrescenta nada (e esconderia o Voltar).
+  if (video?.closest?.('.video-viewer')) {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      video.webkitExitFullscreen?.();
+    } catch {}
+    return;
+  }
+  const groupId = video?.classList?.contains('msg-video') && video.closest('#chat-room')?.dataset.group;
+  if (!groupId) return;
+  try {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    video.webkitExitFullscreen?.();
+  } catch {}
+  openChatVideo(groupId, video.currentSrc || video.src, video);
+}
+document.addEventListener('fullscreenchange', () => chatVideoTakeOver(document.fullscreenElement));
+document.addEventListener('webkitbeginfullscreen', (e) => chatVideoTakeOver(e.target), true);
 
 function chatMessagesHtml(data, urls) {
   const me = chatMe(data);
@@ -4353,6 +4456,12 @@ function drawChatRoom(id, data, urls = {}) {
     room = document.getElementById('chat-room');
     // A lista de mensagens é a mesma enquanto a conversa está aberta: o gesto é ligado uma vez.
     swipeLeft(document.getElementById('chat-messages'), (wrap) => chatDelete(id, wrap.dataset.id));
+    // Vídeo em tela cheia: a do app.
+    const msgs = document.getElementById('chat-messages');
+    msgs.addEventListener('click', (e) => {
+      const open = e.target.closest('.msg-video-open');
+      if (open) openChatVideo(id, open.dataset.video, open.parentElement.querySelector('video'));
+    });
     // Reserva embaixo a altura do campo de escrever (que cresce com o texto e os emojis).
     const slot = document.getElementById('chat-compose');
     new ResizeObserver(() => room.style.setProperty('--compose-h', `${slot.offsetHeight + 8}px`)).observe(slot);
@@ -4426,15 +4535,12 @@ function bindChatCompose(id) {
     if (!body) return text.focus();
     const btn = form.querySelector('.send');
     btn.disabled = true;
-    const { data, error } = await sb.rpc('chat_send', { p_group: id, p_body: body });
+    const error = await chatSendText(id, body);
     btn.disabled = false;
     if (error) return toast(errorText(error), 'error');
     text.value = '';
     grow();
     panel.hidden = true;
-    const row = data[0];
-    chatPut(id, { id: row.id, author_id: chatMeId(id), body, file_path: null, file_name: null, file_type: null, file_size: null, file_ready: false, created_at: row.created_at }, true);
-    chatPush(row.id);
   });
   document.getElementById('chat-file').addEventListener('change', async (e) => {
     const file = e.target.files[0];
@@ -4456,6 +4562,16 @@ function bindChatCompose(id) {
 }
 
 const chatMeId = (id) => chatMe(screenCached(`chat:${id}`) || { people: [] })?.member_id || null;
+
+// Envia um texto ao grupo (do campo da conversa ou do vídeo em tela cheia). Devolve o erro, se houver.
+async function chatSendText(id, body) {
+  const { data, error } = await sb.rpc('chat_send', { p_group: id, p_body: body });
+  if (error) return error;
+  const row = data[0];
+  chatPut(id, { id: row.id, author_id: chatMeId(id), body, file_path: null, file_name: null, file_type: null, file_size: null, file_ready: false, created_at: row.created_at }, true);
+  chatPush(row.id);
+  return null;
+}
 
 // Foto: reduzida no aparelho (fica leve); vídeo, áudio e documento vão como estão (até 25 MB).
 async function chatSendFile(id, file, caption) {

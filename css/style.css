@@ -1011,6 +1011,39 @@ body.totem-full #tabbar, body.totem-full .topbar { visibility: hidden; }
 .msg-img { display: block; margin: 2px 0 4px; }
 .msg-img img { display: block; max-width: 100%; max-height: 320px; border-radius: 10px; }
 .msg-video { display: block; max-width: 100%; max-height: 360px; border-radius: 10px; margin: 2px 0 4px; background: #000; }
+/* Vídeo do chat: botão para a tela cheia do app, no canto de cima. */
+.msg-video-wrap { position: relative; display: block; }
+.msg-video-open {
+  position: absolute; top: 8px; right: 8px; width: 40px; height: 40px; display: grid; place-items: center;
+  border: 0; border-radius: 50%; background: rgb(0 0 0 / .55); color: #fff; cursor: pointer;
+}
+.msg-video-open svg { width: 22px; height: 22px; }
+
+/* Tela cheia do vídeo, dentro do app: Voltar no alto e o campo de escrever embaixo, flutuando. */
+.viewer-open, .viewer-open body { overflow: hidden; }
+.video-viewer {
+  position: fixed; inset: 0; z-index: 28; background: #000; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  padding: calc(64px + env(safe-area-inset-top)) 0 calc(76px + env(safe-area-inset-bottom));
+}
+.video-viewer video { display: block; width: 100%; height: 100%; object-fit: contain; background: #000; }
+.viewer-back {
+  position: absolute; top: calc(10px + env(safe-area-inset-top)); left: 12px; z-index: 1;
+  display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 16px 0 12px;
+  border: 0; border-radius: 22px; background: rgb(255 255 255 / .16); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+.viewer-back svg { width: 22px; height: 22px; }
+.viewer-compose {
+  position: absolute; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 1;
+  display: flex; align-items: flex-end; gap: 6px; padding: 6px; border-radius: 28px;
+  background: rgb(255 255 255 / .14); backdrop-filter: blur(6px);
+}
+.viewer-compose textarea {
+  flex: 1; min-height: 44px; max-height: 120px; resize: none; margin: 0; padding: 10px 14px; border: 0; border-radius: 22px;
+  line-height: 1.35; background: rgb(255 255 255 / .92); color: #1b1e27;
+}
+.viewer-compose textarea::placeholder { color: #5f6475; }
 .msg-audio { display: block; width: 260px; max-width: 100%; margin: 2px 0 4px; }
 .msg-doc { display: flex; align-items: center; gap: 10px; padding: 8px; margin: 2px 0 4px; border-radius: 10px;
   background: color-mix(in srgb, var(--line) 50%, transparent); color: var(--ink); text-decoration: none; }

@@ -105,6 +105,41 @@ test('a liderança cria o grupo, escolhe quem participa e escreve com emoji, lin
   await expect(page.locator('.chat-row').filter({ hasText: name }).locator('.avatar img')).toBeVisible();
 });
 
+test('o vídeo abre em tela cheia no app, com Voltar e o campo para escrever sobre o vídeo', async ({ page }) => {
+  const g = await group();
+  await openLoggedIn(page, as['lider-a'].session, `/i/teste-a/#/chat/${g.id}`);
+  await expect(page.locator('#chat-name')).toHaveText(name);
+  // Um "vídeo" pequeno (o conteúdo não importa para a tela).
+  await page.locator('#chat-file').setInputFiles({ name: 'passeio.mp4', mimeType: 'video/mp4', buffer: Buffer.alloc(2048, 1) });
+  const open = page.getByRole('button', { name: 'Ver o vídeo em tela cheia' }).last();
+  await expect(open).toBeVisible({ timeout: 15000 });
+  await expect(page.locator('.msg.mine').last().locator('video.msg-video')).toHaveAttribute('controlslist', 'nofullscreen');
+
+  await open.click();
+  const viewer = page.getByRole('dialog', { name: 'Vídeo' });
+  await expect(viewer).toBeVisible();
+  await expect(viewer.locator('video')).toBeVisible();
+  // Escreve sobre o vídeo sem sair dele.
+  await viewer.getByRole('textbox', { name: 'Escreva sobre o vídeo' }).fill('Que passeio lindo! 🎉');
+  await viewer.getByRole('button', { name: 'Enviar' }).click();
+  await expect(page.getByText('Mensagem enviada.')).toBeVisible();
+  await expect(viewer).toBeVisible();
+  await expect(viewer.getByRole('textbox', { name: 'Escreva sobre o vídeo' })).toHaveValue('');
+  // Voltar (botão flutuante): volta para a conversa, com a mensagem.
+  await viewer.getByRole('button', { name: 'Voltar para a conversa' }).click();
+  await expect(viewer).toHaveCount(0);
+  await expect(page).toHaveURL(new RegExp(`#/chat/${g.id}$`));
+  await expect(page.locator('.msg.mine').last()).toContainText('Que passeio lindo! 🎉');
+
+  // O voltar do celular também fecha o vídeo e fica na conversa.
+  await open.click();
+  await expect(viewer).toBeVisible();
+  await page.goBack();
+  await expect(viewer).toHaveCount(0);
+  await expect(page).toHaveURL(new RegExp(`#/chat/${g.id}$`));
+  await expect(page.locator('#chat-name')).toHaveText(name);
+});
+
 test('o membro vê a mensagem nova; com o grupo bloqueado, só lê', async ({ page }) => {
   const g = await group();
   await openLoggedIn(page, as['membro-a'].session, '/i/teste-a/#/chat');
