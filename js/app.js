@@ -865,7 +865,7 @@ async function viewPlatform(ctx) {
           <span class="prefix-input"><span>/i/</span><input name="slug" required maxlength="40" pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="batista-central"></span>
           <small class="hint">Letras minúsculas, números e hífens. Não dá para mudar depois.</small>
         </label>
-        <label>E-mail do administrador da instituição de ensino<input name="email" type="email" required placeholder="pastor@exemplo.com"></label>
+        <label>E-mail do administrador da instituição de ensino<input name="email" type="email" required placeholder="diretoria@exemplo.com"></label>
         <label>Nome do administrador<input name="admin_name" maxlength="120"></label>
         <button class="btn primary">Criar instituição de ensino</button>
         <p class="hint">O administrador entra no app com esse e-mail, aceita o convite e configura a instituição de ensino. O ícone próprio da instituição de ensino aparece na próxima publicação do site.</p>
@@ -1155,7 +1155,7 @@ async function viewMyData() {
 
       <section class="card">
         <h2>${icon.upload} Baixar meus dados</h2>
-        <p>Um arquivo com tudo o que o app guarda sobre você: os seus cadastros em cada instituição de ensino, as suas células e presenças, os seus ministérios e escalas, as suas inscrições em eventos, os seus filhos e as entradas deles no infantil, as suas presenças nos cultos, os dados da carteirinha, os álbuns que publicou e os pedidos para tirar fotos, as suas conversas do chat, os seus pedidos de oração, os seus planos de leitura, as notificações, as mensagens enviadas, os aparelhos com notificação e o que você publicou.</p>
+        <p>Um arquivo com tudo o que o app guarda sobre você: os seus cadastros em cada instituição de ensino, os seus filhos e as salas deles, os dados da carteirinha, os álbuns que publicou e os pedidos para tirar fotos, as notificações, as mensagens enviadas, os aparelhos com notificação e o que você publicou.</p>
         <button class="btn" id="export">Baixar arquivo</button>
         <p class="hint">Para corrigir algum dado, use "Meu cadastro" ou fale com a secretaria da instituição de ensino.</p>
       </section>
@@ -1164,7 +1164,7 @@ async function viewMyData() {
         here
           ? `<section class="card">
               <h2>Sair da ${esc(state.church.name)}</h2>
-              <p>O seu cadastro, a sua foto, os seus pedidos de oração e os seus planos de leitura nesta instituição de ensino são apagados, e você deixa de receber as mensagens dela. A sua conta e as outras instituições de ensino continuam.</p>
+              <p>O seu cadastro e a sua foto nesta instituição de ensino são apagados, e você deixa de receber as mensagens dela. A sua conta e as outras instituições de ensino continuam.</p>
               <button class="btn danger-outline" id="leave">Sair desta instituição de ensino</button>
             </section>`
           : ''
@@ -1172,7 +1172,7 @@ async function viewMyData() {
 
       <section class="card danger-zone">
         <h2>Excluir minha conta</h2>
-        <p>Apaga a sua conta e os seus cadastros em <strong>todas</strong> as instituições de ensino, com fotos, pedidos de oração, notificações e aparelhos. Não dá para desfazer. Os eventos e avisos que você publicou continuam na instituição de ensino, sem o seu nome.</p>
+        <p>Apaga a sua conta e os seus cadastros em <strong>todas</strong> as instituições de ensino, com fotos, notificações e aparelhos. Não dá para desfazer. Os eventos e avisos que você publicou continuam na instituição de ensino, sem o seu nome.</p>
         <label>Para confirmar, digite EXCLUIR<input id="confirm-delete" autocomplete="off" autocapitalize="characters"></label>
         <button class="btn danger-outline" id="delete" disabled>Excluir minha conta para sempre</button>
       </section>
@@ -1278,7 +1278,7 @@ function helpTopics() {
     ...(features('agenda')
       ? [[
           'Agenda',
-          `<p>A aba <a href="#/calendario">Agenda</a> mostra os cultos e eventos em três vistas: <strong>Lista</strong> (os próximos 3 meses), <strong>Mês</strong> (o calendário do mês, com os aniversariantes 🎂) e <strong>Dia</strong> (os horários do dia). Toque num evento para ver os detalhes, o mapa do local e a rota pelo Google Maps ou pelo Waze.</p>
+          `<p>A aba <a href="#/calendario">Agenda</a> mostra os eventos em três vistas: <strong>Lista</strong> (os próximos 3 meses), <strong>Mês</strong> (o calendário do mês, com os aniversariantes 🎂) e <strong>Dia</strong> (os horários do dia). Toque num evento para ver os detalhes, o mapa do local e a rota pelo Google Maps ou pelo Waze.</p>
            <p><strong>Adicionar à agenda</strong> baixa um arquivo: abra-o para salvar na agenda do celular. Cultos que se repetem entram na agenda toda semana. Se preferir, use o botão <em>Google Agenda</em>.</p>${
              features('inscricoes')
                ? `<p><strong>Inscrições:</strong> nos eventos com inscrição (retiros, cursos), toque em <em>Quero me inscrever</em>. A confirmação chega no app e por e-mail. Se as vagas acabaram, você pode entrar na <strong>lista de espera</strong>: quando alguém cancelar, a vaga é sua automaticamente e você recebe um aviso. Se não puder ir, cancele pelo app para liberar a vaga. Ninguém vê quem mais se inscreveu.</p>`
@@ -1328,7 +1328,7 @@ function helpTopics() {
       ? [[
           'Pix',
           `<p>Em <a href="#/pix">Pix</a>, aponte a câmera do app do seu banco para o QR Code, ou toque em <em>Copiar código Pix</em> e cole em <em>Pix &gt; Copia e cola</em>. Se quiser, digite o valor antes: ele já vem preenchido no banco.</p>
-           <p>O dinheiro vai direto para a conta da instituição de ensino. O app não recebe, não processa e não guarda nada sobre a sua oferta. Confira o nome do recebedor no banco antes de confirmar.</p>`,
+           <p>O dinheiro vai direto para a conta da instituição de ensino. O app não recebe, não processa e não guarda nada sobre o seu pagamento. Confira o nome do recebedor no banco antes de confirmar.</p>`,
         ]]
       : []),
     [
@@ -1381,8 +1381,8 @@ function helpTopics() {
     ],
     ...(features('agenda')
       ? [[
-          'Criar eventos e cultos',
-          `<p>Na <a href="#/calendario">Agenda</a>, toque no dia do calendário e no botão <strong>+</strong>, embaixo à direita (ou no <strong>+</strong> da lista). Para os cultos fixos, marque <strong>Repetir toda semana</strong> (e, se quiser, até quando).</p>
+          'Criar eventos',
+          `<p>Na <a href="#/calendario">Agenda</a>, toque no dia do calendário e no botão <strong>+</strong>, embaixo à direita (ou no <strong>+</strong> da lista). Para os eventos fixos (como uma reunião toda semana), marque <strong>Repetir toda semana</strong> (e, se quiser, até quando).</p>
            <p>Em <strong>Marcar no mapa</strong>, busque o endereço ou toque no ponto exato: quem abrir o evento vê o mapa e tem os botões de rota pelo Google Maps e pelo Waze. O mesmo vale para o endereço da instituição de ensino.</p>
            
            <p>Escolha o <strong>lembrete</strong>: os membros com notificação ativada recebem 1 hora, 2 horas, 3 horas ou 1 dia antes. Editar ou excluir um evento que se repete vale para todas as semanas.</p>`,
@@ -1421,7 +1421,7 @@ function helpTopics() {
     ...(features('aniversarios')
       ? [[
           'Mensagem de aniversário',
-          `<p>Em <a href="#/config/aniversario">Menu &gt; Mensagem de aniversário</a>, escreva o título e o texto. Toque nos campos para colocar no texto: <code>{nome}</code>, <code>{primeiro_nome}</code>, <code>{igreja}</code> e <code>{idade}</code>. A prévia mostra como fica. Para alegrar, toque nos emojis embaixo (🎂 🎉 🙏…) ou use os do teclado do celular.</p>
+          `<p>Em <a href="#/config/aniversario">Menu &gt; Mensagem de aniversário</a>, escreva o título e o texto. Toque nos campos para colocar no texto: <code>{nome}</code>, <code>{primeiro_nome}</code>, <code>{instituicao}</code> e <code>{idade}</code>. A prévia mostra como fica. Para alegrar, toque nos emojis embaixo (🎂 🎉 🎓…) ou use os do teclado do celular.</p>
            <p>A mensagem sai às 7h (horário de Brasília). Quem nasceu em 29/02 recebe em 28/02 nos anos que não são bissextos. Você pode pôr uma imagem e ligar o <strong>resumo para a liderança</strong> (aniversariantes do dia e, às segundas, os da semana).</p>
            <p>Ela vai por notificação no celular (para quem ativou), fica na central do app e vai por e-mail para quem tem e-mail no cadastro.</p>`,
         ]]
@@ -1436,7 +1436,7 @@ function helpTopics() {
     ],
     [
       'Divulgar o app para a instituição de ensino',
-      `<p>Mande este endereço pelo WhatsApp ou mostre no telão. Cada pessoa entra com o e-mail que a secretaria cadastrou.</p>
+      `<p>Mande este endereço pelo WhatsApp (por exemplo, no grupo dos pais) ou mostre na reunião. Cada pessoa entra com o e-mail que a secretaria cadastrou.</p>
        <div class="copy-row"><code id="app-url">${esc(PAGE_URL)}</code><button class="btn small" id="copy-url" type="button">Copiar</button></div>`,
     ],
   ];
@@ -2272,7 +2272,7 @@ async function viewSettings(ctx) {
       <fieldset class="card">
         <legend>Textos</legend>
         <label>Mensagem de boas-vindas<textarea name="welcome_text" rows="2" maxlength="500">${esc(c.welcome_text || '')}</textarea></label>
-        <label>Sobre a instituição de ensino<textarea name="about_text" rows="4" maxlength="2000" placeholder="Horários dos cultos, história, pastores…">${esc(c.about_text || '')}</textarea></label>
+        <label>Sobre a instituição de ensino<textarea name="about_text" rows="4" maxlength="2000" placeholder="Horários, história, equipe…">${esc(c.about_text || '')}</textarea></label>
         <label>Endereço<input name="address" maxlength="200" value="${esc(c.address || '')}"></label>
         <label>Cidade<input name="city" maxlength="80" value="${esc(c.city || '')}"></label>
         ${pinField(c)}
@@ -2513,7 +2513,7 @@ async function viewOffer() {
 }
 
 // ---------------------------------------------------------------------
-// Agenda (cultos e eventos) e mural de avisos
+// Agenda (eventos) e mural de avisos
 // ---------------------------------------------------------------------
 const fmtHour = (d) => `${d.getHours()}h${d.getMinutes() ? String(d.getMinutes()).padStart(2, '0') : ''}`;
 const fmtDayShort = (d) => d.toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '');
@@ -2970,7 +2970,7 @@ async function viewEventForm(ctx, id) {
     <form id="event" class="form page">
       <a href="${id ? `#/agenda/${id}` : '#/agenda'}" class="back">← ${id ? 'Evento' : 'Agenda'}</a>
       <h1>${id ? 'Editar evento' : 'Novo evento'}</h1>
-      <label>Título<input name="title" required minlength="3" maxlength="120" value="${esc(ev.title)}" placeholder="Culto de domingo"></label>
+      <label>Título<input name="title" required minlength="3" maxlength="120" value="${esc(ev.title)}" placeholder="Reunião de pais"></label>
       <label>Data<input name="date" type="date" required value="${s ? isoLocal(s) : /^\d{4}-\d{2}-\d{2}$/.test(ctx.params.get('data') || '') ? ctx.params.get('data') : ''}"></label>
       <div class="colors">
         ${timeField('start', 'Começa', s ? timeValue(s) : '', { required: true })}
@@ -4279,7 +4279,7 @@ async function viewAlbumForm(ctx, id) {
     <form id="album" class="form page">
       <a href="${id ? `#/galeria/${id}` : '#/galeria'}" class="back">← ${id ? esc(a.title) : 'Galeria'}</a>
       <h1>${id ? 'Editar álbum' : 'Novo álbum'}</h1>
-      <label>Título<input name="title" required minlength="2" maxlength="80" value="${esc(a.title)}" placeholder="Batismo de outubro"></label>
+      <label>Título<input name="title" required minlength="2" maxlength="80" value="${esc(a.title)}" placeholder="Festa junina"></label>
       <label>Data<input name="album_date" type="date" required value="${esc(a.album_date)}"></label>
       <label>Descrição (opcional)<textarea name="description" rows="3" maxlength="500">${esc(a.description || '')}</textarea></label>
       ${id ? '' : '<p class="hint">Depois de criar, abra o álbum e toque em <em>Adicionar fotos</em>. As fotos são reduzidas no celular antes do envio, para gastar pouco espaço.</p>'}

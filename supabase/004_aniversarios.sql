@@ -50,7 +50,7 @@ begin
   insert into public.message_templates (church_id, kind, title, body)
   values
     (new.id, 'aniversario', 'Feliz aniversário, {primeiro_nome}!',
-     'A {igreja} celebra a sua vida hoje! Que Deus abençoe o seu novo ano com paz, saúde e alegria. Um abraço de toda a instituição de ensino.'),
+     'A {instituicao} celebra o seu dia! Desejamos um novo ano cheio de alegria, saúde e conquistas. Um abraço de toda a equipe.'),
     (new.id, 'resumo_lideres', 'Aniversariantes', 'Resumo dos aniversariantes para a liderança.')
   on conflict do nothing;
   return new;
@@ -66,7 +66,7 @@ select c.id, k.kind, k.title, k.body
 from public.churches c
 cross join (values
   ('aniversario', 'Feliz aniversário, {primeiro_nome}!',
-   'A {igreja} celebra a sua vida hoje! Que Deus abençoe o seu novo ano com paz, saúde e alegria. Um abraço de toda a instituição de ensino.'),
+   'A {instituicao} celebra o seu dia! Desejamos um novo ano cheio de alegria, saúde e conquistas. Um abraço de toda a equipe.'),
   ('resumo_lideres', 'Aniversariantes', 'Resumo dos aniversariantes para a liderança.')
 ) as k(kind, title, body)
 on conflict do nothing;

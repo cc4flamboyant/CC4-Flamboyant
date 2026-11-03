@@ -266,18 +266,19 @@ const FIN_KIND_NAMES = {
 };
 export const firstName = (name) => String(name ?? '').trim().split(/\s+/)[0] || '';
 
-// Campos da mensagem de aniversário: {nome}, {primeiro_nome}, {igreja}, {idade}.
-export const MESSAGE_FIELDS = ['nome', 'primeiro_nome', 'igreja', 'idade'];
+// Campos da mensagem de aniversário: {nome}, {primeiro_nome}, {instituicao}, {idade}.
+// {igreja} (o nome antigo) continua funcionando nas mensagens já escritas.
+export const MESSAGE_FIELDS = ['nome', 'primeiro_nome', 'instituicao', 'idade'];
 // Casamento e batismo: {anos} no lugar de {idade}.
-export const SPECIAL_FIELDS = ['nome', 'primeiro_nome', 'igreja', 'anos'];
+export const SPECIAL_FIELDS = ['nome', 'primeiro_nome', 'instituicao', 'anos'];
 // "1 ano", "10 anos" (igual a public.years_text no banco).
 export const yearsText = (n) => (n == null || n === '' ? '' : Number(n) === 1 ? '1 ano' : `${n} anos`);
 
 // Atalhos na tela da mensagem; o teclado do celular também põe qualquer outro emoji.
-export const MESSAGE_EMOJIS = ['🎂', '🎉', '🎈', '🎁', '🥳', '🙏', '🙌', '❤️', '😊', '✨', '🌟', '🌷', '🕊️', '✝️', '📖', '🎶'];
+export const MESSAGE_EMOJIS = ['🎂', '🎉', '🎈', '🎁', '🥳', '🎓', '🙌', '❤️', '😊', '✨', '🌟', '🌷', '📚', '✏️', '🏫', '🎶'];
 
 export function renderMessage(template, { name, church, age }) {
-  const values = { nome: name, primeiro_nome: firstName(name), igreja: church, idade: age ?? '', anos: yearsText(age) };
+  const values = { nome: name, primeiro_nome: firstName(name), instituicao: church, igreja: church, idade: age ?? '', anos: yearsText(age) };
   return String(template ?? '')
     .replace(/\{(\w+)\}/g, (all, key) => (key in values ? String(values[key]) : all))
     .replace(/[ \t]{2,}/g, ' ')

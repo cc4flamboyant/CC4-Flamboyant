@@ -103,6 +103,7 @@ test('mensagem de aniversário com os campos da igreja', async () => {
   const data = { name: 'Maria  da Silva', church: 'Igreja Exemplo', age: 40 };
   expect(renderMessage('Feliz aniversário, {primeiro_nome}!', data)).toBe('Feliz aniversário, Maria!');
   expect(renderMessage('{nome} faz {idade} anos na {igreja}. {outro}', data)).toBe('Maria da Silva faz 40 anos na Igreja Exemplo. {outro}');
+  expect(renderMessage('Parabéns da {instituicao}!', data)).toBe('Parabéns da Igreja Exemplo!'); // o campo novo; {igreja} continua valendo
   expect(renderMessage('Parabéns {primeiro_nome} {idade}', { name: 'Ana', church: 'X' })).toBe('Parabéns Ana');
   expect(renderMessage('Hoje você completa {anos} de casamento!', { ...data, age: 10 })).toBe('Hoje você completa 10 anos de casamento!');
   expect(renderMessage('{anos} de batismo', { ...data, age: 1 })).toBe('1 ano de batismo');

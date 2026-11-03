@@ -33,10 +33,11 @@ $$;
 create or replace function public.render_template(p_text text, p_name text, p_church text, p_age integer)
 returns text language sql immutable as $$
   select trim(regexp_replace(
-    replace(replace(replace(replace(replace(p_text,
+    replace(replace(replace(replace(replace(replace(p_text,
       '{nome}', p_name),
       '{primeiro_nome}', split_part(trim(p_name), ' ', 1)),
       '{igreja}', p_church),
+      '{instituicao}', p_church),
       '{idade}', coalesce(p_age::text, '')),
       '{anos}', public.years_text(p_age)),
     '[ \t]{2,}', ' ', 'g'))
@@ -51,7 +52,7 @@ begin
   insert into public.message_templates (church_id, kind, title, body)
   values
     (new.id, 'aniversario', 'Feliz aniversário, {primeiro_nome}!',
-     'A {igreja} celebra a sua vida hoje! Que Deus abençoe o seu novo ano com paz, saúde e alegria. Um abraço de toda a instituição de ensino.'),
+     'A {instituicao} celebra o seu dia! Desejamos um novo ano cheio de alegria, saúde e conquistas. Um abraço de toda a equipe.'),
     (new.id, 'resumo_lideres', 'Aniversariantes', 'Resumo dos aniversariantes para a liderança.'),
     (new.id, 'casamento', 'Feliz aniversário de casamento, {primeiro_nome}!',
      'Hoje você completa {anos} de casamento! A {igreja} se alegra com vocês e pede a Deus que continue abençoando o seu lar. 💍'),
