@@ -3991,11 +3991,32 @@ function drawRoom(ctx, id, { room, kids, notes, messages, day }) {
       <a href="#/salas" class="back">← Salas</a>
       <h1>Sala ${esc(room.name)}</h1>
       <p class="hint">${room.tutor_name ? `Tutor: ${esc(room.tutor_name)}` : 'Sem tutor'}${room.description ? ` · ${esc(room.description)}` : ''}</p>
-      <div class="actions-row">
-        <a class="btn" href="#/salas/${id}/aviso">${icon.megaphone} Avisar os pais</a>
-        ${projectsOn() ? `<a class="btn" href="#/projetos?sala=${id}">${icon.book} Projetos</a>` : ''}
-        ${leader ? `<a class="btn" href="#/salas/${id}/editar">${icon.gear} Editar sala</a>` : ''}
-      </div>
+      <section class="card event-save room-actions" aria-label="Ações da sala">
+        <div class="save-tiles${projectsOn() ? '' : ' single'}">
+          <a class="save-tile" href="#/salas/${id}/aviso">
+            <span class="save-icon">${icon.megaphone}</span>
+            <strong>Avisar os pais</strong>
+            <small>Recado no celular dos pais</small>
+          </a>
+          ${
+            projectsOn()
+              ? `<a class="save-tile" href="#/projetos?sala=${id}">
+                  <span class="save-icon">${icon.book}</span>
+                  <strong>Projetos</strong>
+                  <small>Da sala</small>
+                </a>`
+              : ''
+          }
+        </div>
+      </section>
+      ${
+        leader
+          ? `<section class="card event-manage" aria-label="Gerenciar sala">
+              <h2>Gerenciar sala</h2>
+              <a class="menu-row" href="#/salas/${id}/editar">${icon.pencil}<span>Editar sala<small>Nome, tutor e descrição</small></span>${icon.chevron}</a>
+            </section>`
+          : ''
+      }
 
       <section class="card">
         <h2>${icon.clipboard} Presença</h2>

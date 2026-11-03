@@ -61,6 +61,10 @@ test('a liderança cria a sala com o tutor e coloca a criança', async ({ page }
   await page.getByRole('button', { name: 'Criar sala' }).click();
   await expect(page.getByRole('heading', { name: `Sala ${tag} Kids` })).toBeVisible();
   await expect(page.locator('.page')).toContainText('Tutor: Membro da A');
+  // Botões no modelo da agenda: ações da sala e, para a liderança, Gerenciar sala.
+  await expect(page.locator('.room-actions .save-tile').first()).toContainText('Avisar os pais');
+  await expect(page.getByRole('heading', { name: 'Gerenciar sala' })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Editar sala/ })).toBeVisible();
   ids.room = page.url().match(/salas\/([0-9a-f-]{36})/)[1];
 
   await page.goto('/i/teste-a/#/salas/criancas');
@@ -75,6 +79,9 @@ test('o tutor marca a presença, escreve as anotações e avisa os pais; os pais
   await openLoggedIn(page, as['membro-a'].session, '/i/teste-a/#/salas');
   await expect(page.getByRole('heading', { name: 'Minhas salas' })).toBeVisible();
   await page.getByRole('link', { name: new RegExp(`${tag} Kids`) }).click();
+  // O tutor usa a sala, mas não a gerencia (editar é da liderança).
+  await expect(page.locator('.room-actions .save-tile').first()).toContainText('Avisar os pais');
+  await expect(page.getByRole('heading', { name: 'Gerenciar sala' })).toHaveCount(0);
   const row = page.locator('.kid-row', { hasText: `${tag} Ana` });
   await expect(row).toContainText('⚠️ Alergia a amendoim');
   await row.getByRole('checkbox').check();

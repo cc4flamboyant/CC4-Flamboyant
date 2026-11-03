@@ -244,6 +244,8 @@ legend { font-weight: 700; padding: 0 4px; }
 .save-icon { display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 4px; border-radius: 50%; background: var(--brand-soft); color: var(--link); }
 .save-icon svg { width: 24px; height: 24px; }
 .event-save .hint { margin: 10px 0 0; }
+.save-tiles.single { grid-template-columns: 1fr; }
+.room-actions { padding: 12px; }
 .event-manage { display: flex; flex-direction: column; gap: 8px; }
 .event-manage .menu-row small { color: var(--muted); font-weight: 400; font-size: .8rem; }
 .menu-row.danger-row, .menu-row.danger-row > svg:first-child { color: var(--danger); }
