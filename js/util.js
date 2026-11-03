@@ -115,6 +115,7 @@ export const FEATURES = [
   { key: 'salas', label: 'Meus filhos e salas das crianças' },
   { key: 'carteirinha', label: 'Carteirinha digital' },
   { key: 'galeria', label: 'Galeria de fotos' },
+  { key: 'chat', label: 'Chat em grupos' },
   { key: 'pix', label: 'Pix' },
 ];
 
@@ -276,6 +277,41 @@ export const yearsText = (n) => (n == null || n === '' ? '' : Number(n) === 1 ? 
 
 // Reações nos avisos (as mesmas do banco: supabase/019_reacoes_nos_avisos.sql).
 export const REACTIONS = ['👍', '❤️', '🎉', '😂', '😮', '😢'];
+
+// Emojis do botão do chat.
+export const CHAT_EMOJIS = [
+  '😀', '😁', '😂', '🤣', '😊', '😍', '🥰', '😘', '😉', '😎', '🤩', '🥳', '🤔', '😅', '😮', '😢',
+  '😭', '😡', '🙄', '😴', '🤗', '🙏', '👏', '🙌', '👍', '👎', '👋', '💪', '✌️', '🤝', '❤️', '💙',
+  '💚', '💛', '🔥', '✨', '🎉', '🎂', '🎈', '🎁', '🎓', '📚', '✏️', '📝', '🏫', '⚽', '🎶', '⭐',
+  '✅', '❌', '⚠️', '📌', '📅', '⏰', '📷', '🎥',
+];
+
+// Texto da mensagem para o HTML: escapa tudo e transforma os endereços (https://… ou www.…)
+// em links que abrem fora do app. Só http e https: nada de javascript: nem outros.
+export function linkify(text) {
+  const s = String(text ?? '');
+  const re = /\b((?:https?:\/\/|www\.)[^\s<>"']+)/gi;
+  let out = '';
+  let last = 0;
+  for (const m of s.matchAll(re)) {
+    let url = m[1];
+    // Pontuação no fim da frase não faz parte do link.
+    const tail = url.match(/[.,;:!?)\]]+$/)?.[0] || '';
+    if (tail) url = url.slice(0, -tail.length);
+    if (!url.replace(/^(https?:\/\/|www\.)/i, '')) continue;
+    const href = /^https?:/i.test(url) ? url : `https://${url}`;
+    out += `${esc(s.slice(last, m.index))}<a href="${esc(href)}" target="_blank" rel="noopener noreferrer nofollow">${esc(url)}</a>`;
+    last = m.index + url.length;
+  }
+  return out + esc(s.slice(last));
+}
+
+// Tamanho de arquivo para pessoas: "850 KB", "3,2 MB".
+export function fmtBytes(n) {
+  if (!(n >= 0)) return '';
+  if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
+  return `${(n / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
+}
 
 // Atalhos na tela da mensagem; o teclado do celular também põe qualquer outro emoji.
 export const MESSAGE_EMOJIS = ['🎂', '🎉', '🎈', '🎁', '🥳', '🎓', '🙌', '❤️', '😊', '✨', '🌟', '🌷', '📚', '✏️', '🏫', '🎶'];

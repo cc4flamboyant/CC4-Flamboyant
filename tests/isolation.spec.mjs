@@ -896,3 +896,144 @@ test.describe('Reações nos avisos (019)', () => {
     }
   });
 });
+
+test.describe('Chat em grupos (020)', () => {
+  const tag = `chat-${Date.now()}`;
+  const ids = {};
+  const send = (who, body, file = {}) => rpc(who, 'chat_send', { p_group: ids.group, p_body: body, ...file });
+  const groupsOf = async (who) => {
+    const res = await rpc(who, 'chat_group_list', { p_church: church.a });
+    return res.ok() ? res.json() : [];
+  };
+  const putFile = (who, path, type = 'text/plain') =>
+    api.post(`${SUPABASE_URL}/storage/v1/object/chat/${path}`, { headers: { ...as[who].headers, 'Content-Type': type }, data: Buffer.from('Olá, turma!') });
+  const sign = (who, path) => api.post(`${SUPABASE_URL}/storage/v1/object/sign/chat/${path}`, { headers: as[who].headers, data: { expiresIn: 60 } });
+
+  test.beforeAll(async () => {
+    if (!api) return;
+    [{ id: ids.membro }] = await get('adm-a', `members?select=id&church_id=eq.${church.a}&user_id=eq.${as['membro-a'].id}`);
+    [{ id: ids.lider }] = await get('adm-a', `members?select=id&church_id=eq.${church.a}&user_id=eq.${as['lider-a'].id}`);
+    [{ id: ids.fulanoB }] = await get('adm-b', 'members?select=id&name=eq.Fulano da B');
+  });
+
+  test.afterAll(async () => {
+    if (!api || !ids.group) return;
+    const files = await get('lider-a', `chat_messages?select=file_path&group_id=eq.${ids.group}&file_path=not.is.null`);
+    if (files.length) await api.delete(`${SUPABASE_URL}/storage/v1/object/chat`, { headers: as['lider-a'].headers, data: { prefixes: files.map((f) => f.file_path) } });
+    await api.delete(rest(`chat_groups?id=eq.${ids.group}`), { headers: as['lider-a'].headers });
+  });
+
+  test('só a liderança cria grupos, e só com gente da própria instituição', async () => {
+    const create = (who, members) =>
+      rpc(who, 'chat_create_group', { p_church: church.a, p_name: `${tag} Turma`, p_description: null, p_locked: false, p_members: members });
+    for (const who of ['membro-a', 'adm-b', 'sem-igreja']) expect((await create(who, [])).ok(), who).toBe(false);
+    const res = await create('lider-a', [ids.membro, ids.fulanoB]);
+    expect(res.ok(), await res.text()).toBe(true);
+    ids.group = await res.json();
+    const people = await (await rpc('lider-a', 'chat_group_members', { p_group: ids.group })).json();
+    // Quem é de outra instituição não entra; quem criou é administrador.
+    expect(people.map((p) => p.member_id).sort()).toEqual([ids.lider, ids.membro].sort());
+    expect(people.find((p) => p.member_id === ids.lider).is_admin).toBe(true);
+    expect(people.find((p) => p.member_id === ids.membro).is_admin).toBe(false);
+    // Escolher pessoas: só a liderança (para criar) ou o administrador do grupo.
+    expect(await (await rpc('membro-a', 'chat_candidates', { p_church: church.a })).json()).toEqual([]);
+    expect(await (await rpc('membro-a', 'chat_candidates', { p_church: church.a, p_group: ids.group })).json()).toEqual([]);
+    expect(await (await rpc('adm-b', 'chat_candidates', { p_church: church.a })).json()).toEqual([]);
+    const cands = await (await rpc('lider-a', 'chat_candidates', { p_church: church.a, p_group: ids.group })).json();
+    expect(cands.map((c) => c.member_id)).not.toContain(ids.membro);
+  });
+
+  test('só quem está no grupo lê e escreve; ninguém grava direto na tabela', async () => {
+    const sent = await send('membro-a', `Olá ${tag} https://exemplo.com`);
+    expect(sent.ok(), await sent.text()).toBe(true);
+    ids.msg = (await sent.json())[0].id;
+    expect(await get('lider-a', `chat_messages?select=id,body&group_id=eq.${ids.group}`)).toEqual([{ id: ids.msg, body: `Olá ${tag} https://exemplo.com` }]);
+    // O administrador da instituição fora do grupo, a outra instituição e quem não está em nenhuma: nada.
+    for (const who of ['adm-a', 'adm-b', 'sem-igreja']) {
+      expect(await get(who, `chat_messages?select=id&group_id=eq.${ids.group}`), who).toEqual([]);
+      expect(await get(who, `chat_groups?select=id&id=eq.${ids.group}`), who).toEqual([]);
+      expect(await get(who, `chat_members?select=member_id&group_id=eq.${ids.group}`), who).toEqual([]);
+      expect(await (await rpc(who, 'chat_group_members', { p_group: ids.group })).json(), who).toEqual([]);
+      expect((await send(who, 'Intruso')).ok(), who).toBe(false);
+    }
+    expect((await groupsOf('adm-b')).map((g) => g.id)).not.toContain(ids.group);
+    const direct = await api.post(rest('chat_messages'), {
+      headers: as['membro-a'].headers,
+      data: { group_id: ids.group, church_id: church.a, author_id: ids.lider, body: 'Falsificada' },
+    });
+    expect(direct.ok()).toBe(false);
+    const join = await api.post(rest('chat_members'), { headers: as['adm-b'].headers, data: { group_id: ids.group, member_id: ids.fulanoB } });
+    expect(join.ok()).toBe(false);
+    // Visitante sem conta.
+    const anon = await api.post(rest('rpc/chat_send'), { headers: { apikey: ANON_KEY, 'Content-Type': 'application/json' }, data: { p_group: ids.group, p_body: 'x' } });
+    expect(anon.ok()).toBe(false);
+    // Não lidas: a líder tem 1; depois de ler, 0.
+    expect((await groupsOf('lider-a')).find((g) => g.id === ids.group).unread).toBe(1);
+    expect((await rpc('lider-a', 'chat_mark_read', { p_group: ids.group })).ok()).toBe(true);
+    expect((await groupsOf('lider-a')).find((g) => g.id === ids.group).unread).toBe(0);
+    // O participante não apaga a mensagem dos outros, só a própria.
+    const mine = await send('lider-a', 'Da líder');
+    const liderMsg = (await mine.json())[0].id;
+    const del = await api.delete(rest(`chat_messages?id=eq.${liderMsg}`), { headers: returning(as['membro-a'].headers) });
+    expect(await del.text()).not.toContain(liderMsg);
+    const own = await api.delete(rest(`chat_messages?id=eq.${ids.msg}`), { headers: returning(as['membro-a'].headers) });
+    expect(await own.text()).toContain(ids.msg);
+  });
+
+  test('grupo bloqueado: só os administradores enviam; o participante não muda o grupo', async () => {
+    const lock = (who, locked) => api.patch(rest(`chat_groups?id=eq.${ids.group}`), { headers: returning(as[who].headers), data: { locked } });
+    expect(await (await lock('membro-a', true)).text()).not.toContain(ids.group);
+    expect(await (await lock('lider-a', true)).json()).toEqual([expect.objectContaining({ id: ids.group, locked: true })]);
+    expect((await send('membro-a', 'Posso?')).ok()).toBe(false);
+    expect((await send('lider-a', 'Recado da direção')).ok()).toBe(true);
+    // O participante não coloca gente, não vira administrador e não tira ninguém.
+    expect((await rpc('membro-a', 'chat_add_members', { p_group: ids.group, p_members: [ids.membro] })).ok()).toBe(false);
+    expect((await rpc('membro-a', 'chat_set_admin', { p_group: ids.group, p_member: ids.membro, p_on: true })).ok()).toBe(false);
+    expect((await rpc('membro-a', 'chat_remove_member', { p_group: ids.group, p_member: ids.lider })).ok()).toBe(false);
+    // O administrador torna o participante administrador: aí ele envia.
+    expect((await rpc('lider-a', 'chat_set_admin', { p_group: ids.group, p_member: ids.membro, p_on: true })).ok()).toBe(true);
+    expect((await send('membro-a', 'Agora posso')).ok()).toBe(true);
+    expect((await rpc('lider-a', 'chat_set_admin', { p_group: ids.group, p_member: ids.membro, p_on: false })).ok()).toBe(true);
+    expect((await send('membro-a', 'E agora?')).ok()).toBe(false);
+    expect(await (await lock('lider-a', false)).json()).toEqual([expect.objectContaining({ locked: false })]);
+  });
+
+  test('anexos: só o autor envia o arquivo registrado; só o grupo abre; limite de tamanho', async () => {
+    const file = { p_file_name: 'lista.txt', p_file_type: 'text/plain', p_file_size: 11, p_ext: 'txt' };
+    expect((await send('membro-a', null, { ...file, p_file_size: 30 * 1024 * 1024 })).ok()).toBe(false); // passa de 25 MB
+    const res = await send('membro-a', 'Segue a lista', file);
+    expect(res.ok(), await res.text()).toBe(true);
+    const [{ id, file_path: path }] = await res.json();
+    expect(path.startsWith(`${church.a}/${ids.group}/`)).toBe(true);
+    // Antes de o arquivo chegar, só o autor vê a mensagem.
+    expect(await get('lider-a', `chat_messages?select=id&id=eq.${id}`)).toEqual([]);
+    for (const who of ['lider-a', 'adm-b']) await expectDenied(await putFile(who, path), who);
+    await expectDenied(await putFile('membro-a', `${church.a}/${ids.group}/qualquer.txt`), 'caminho não registrado');
+    expect((await rpc('membro-a', 'chat_file_ready', { p_message: id })).ok()).toBe(false); // ainda não chegou
+    const up = await putFile('membro-a', path);
+    expect(up.ok(), await up.text()).toBe(true);
+    expect((await rpc('lider-a', 'chat_file_ready', { p_message: id })).ok()).toBe(false); // não é o autor
+    expect((await rpc('membro-a', 'chat_file_ready', { p_message: id })).ok()).toBe(true);
+    expect(await get('lider-a', `chat_messages?select=id,file_size&id=eq.${id}`)).toEqual([{ id, file_size: 12 }]);
+    expect((await sign('lider-a', path)).ok()).toBe(true);
+    for (const who of ['adm-a', 'adm-b', 'sem-igreja']) expect((await sign(who, path)).ok(), who).toBe(false);
+    // O participante não apaga o arquivo dos outros.
+    const other = await send('lider-a', null, file);
+    const [{ file_path: liderPath }] = await other.json();
+    expect((await putFile('lider-a', liderPath)).ok()).toBe(true);
+    await api.delete(`${SUPABASE_URL}/storage/v1/object/chat`, { headers: as['membro-a'].headers, data: { prefixes: [liderPath] } });
+    expect((await sign('lider-a', liderPath)).ok()).toBe(true);
+  });
+
+  test('"Baixar meus dados" traz os grupos e as mensagens; sair do grupo tira o acesso', async () => {
+    const mine = await (await rpc('membro-a', 'export_my_data')).json();
+    expect(mine.grupos_de_conversa).toEqual(expect.arrayContaining([expect.objectContaining({ grupo: `${tag} Turma` })]));
+    expect(mine.mensagens_enviadas_no_chat).toEqual(expect.arrayContaining([expect.objectContaining({ grupo: `${tag} Turma`, texto: 'Agora posso' })]));
+    expect((await rpc('membro-a', 'chat_remove_member', { p_group: ids.group, p_member: ids.membro })).ok()).toBe(true);
+    expect((await groupsOf('membro-a')).map((g) => g.id)).not.toContain(ids.group);
+    expect(await get('membro-a', `chat_messages?select=id&group_id=eq.${ids.group}`)).toEqual([]);
+    // A líder coloca de novo (e a conta da outra instituição continua sem entrar).
+    expect(await (await rpc('lider-a', 'chat_add_members', { p_group: ids.group, p_members: [ids.membro, ids.fulanoB] })).json()).toBe(1);
+    expect((await groupsOf('membro-a')).map((g) => g.id)).toContain(ids.group);
+  });
+});

@@ -151,6 +151,40 @@ test.describe('Banco: visitante sem login (galeria)', () => {
   });
 });
 
+test.describe('Banco: visitante sem login (chat, 020)', () => {
+  test('não lê grupos, participantes, mensagens nem anexos; não envia nada', async ({ request }) => {
+    for (const table of ['chat_groups', 'chat_members', 'chat_messages']) {
+      const res = await request.get(rest(`${table}?select=*`), { headers });
+      if (res.ok()) expect(await res.json(), table).toEqual([]);
+    }
+    expect((await request.post(rest('chat_messages'), { headers, data: { group_id: UUID, church_id: UUID, body: 'Intruso' } })).ok()).toBe(false);
+    const calls = {
+      chat_group_list: { p_church: UUID },
+      chat_group_members: { p_group: UUID },
+      chat_candidates: { p_church: UUID },
+      chat_create_group: { p_church: UUID, p_name: 'Intruso', p_description: null, p_locked: false, p_members: [] },
+      chat_add_members: { p_group: UUID, p_members: [] },
+      chat_remove_member: { p_group: UUID, p_member: UUID },
+      chat_set_admin: { p_group: UUID, p_member: UUID, p_on: true },
+      chat_send: { p_group: UUID, p_body: 'Intruso' },
+      chat_file_ready: { p_message: UUID },
+      chat_mark_read: { p_group: UUID },
+      chat_storage_used: { p_church: UUID },
+      chat_is_in: { p_group: UUID },
+    };
+    for (const [fn, data] of Object.entries(calls)) expect((await rpc(request, fn, data)).ok(), fn).toBe(false);
+    // O aviso no celular pede a senha do envio.
+    expect((await rpc(request, 'claim_chat_push', { p_secret: 'errada', p_message: UUID })).ok()).toBe(false);
+    const list = await request.post(`${SUPABASE_URL}/storage/v1/object/list/chat`, { headers: storageHeaders, data: { prefix: '', limit: 10 } });
+    if (list.ok()) expect(await list.json()).toEqual([]);
+    const up = await request.post(`${SUPABASE_URL}/storage/v1/object/chat/${UUID}/${UUID}/x.txt`, {
+      headers: { ...storageHeaders, 'Content-Type': 'text/plain' },
+      data: Buffer.from('oi'),
+    });
+    expect(up.ok()).toBe(false);
+  });
+});
+
 // Teste de vulnerabilidade (016): funções de gatilho e de cálculo ficam fora do alcance de quem não
 // está logado. As das regras de leitura continuam (respondem "não" para quem não está logado).
 test.describe('Banco: visitante sem login (funções que ele não usa, 016)', () => {

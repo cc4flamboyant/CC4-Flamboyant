@@ -3,7 +3,7 @@ import { CONFIG } from './config.js';
 import {
   esc, slugify, isValidSlug, churchSlugFromPath, churchRestUrl, inkOn, readableOnWhite, darkPalette, normalizeHex, normalizePhone, fmtPhone,
   ROLES, isLeaderRole, FEATURES, cardTokenFrom, fold, fmtDate, EMAIL_RE, parseMembersCsv, MEMBERS_CSV_TEMPLATE,
-  renderMessage, firstName, joinNames, REACTIONS, MESSAGE_FIELDS, SPECIAL_FIELDS, yearsText, MESSAGE_EMOJIS, icsForEvent, googleCalendarUrl, REMIND_OPTIONS,
+  renderMessage, firstName, joinNames, REACTIONS, CHAT_EMOJIS, linkify, fmtBytes, MESSAGE_FIELDS, SPECIAL_FIELDS, yearsText, MESSAGE_EMOJIS, icsForEvent, googleCalendarUrl, REMIND_OPTIONS,
 } from './util.js';
 import { resizeImage, resizeLogo, makeIconSet, resizeForGallery } from './images.js';
 import { maybeSuggestInstall, installState, installNow, iconReady, ICON_PREPARING } from './install.js';
@@ -64,7 +64,8 @@ const SCREEN_PREFIX = 'tela:';
 const screenMem = new Map();
 const screenLoading = new Map();
 // Telas com dados sensíveis de outras pessoas: guardadas só na memória, nunca gravadas no aparelho.
-const PRIVATE_SCREENS = /^(sala:|salas$|criancas$)/;
+// As conversas do chat também: ficam só na memória.
+const PRIVATE_SCREENS = /^(sala:|salas$|criancas$|chat($|:))/;
 const screenKey = (name) => `${SCREEN_PREFIX}${state.user?.id}:${state.church?.id}:${name}`;
 
 function screenCached(name) {
@@ -216,6 +217,7 @@ function prefetchScreens() {
     }
     if (featureOn('avisos')) screenFetch('avisos', loadAnnouncements).catch(() => {});
     if (featureOn('salas')) screenFetch('filhos', loadMyKids).catch(() => {});
+    if (featureOn('chat')) screenFetch('chat', loadChatGroups).catch(() => {});
     if (featureOn('galeria')) {
       // E as capas dos álbuns, para a Galeria abrir com as imagens.
       screenFetch('galeria', loadAlbums)
@@ -431,6 +433,7 @@ const icon = {
   chat: '<svg viewBox="0 0 24 24"><path d="M4 5.5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></svg>',
   wallet: '<svg viewBox="0 0 24 24"><path d="M4 7.5a2 2 0 0 1 2-2h12v3"/><rect x="4" y="8.5" width="16" height="11" rx="2"/><path d="M15.5 14h.01"/></svg>',
   send: '<svg viewBox="0 0 24 24"><path d="m4 12 16-7.5-6 15-2.5-6z"/><path d="m11.5 13.5 8.5-9"/></svg>',
+  clip: '<svg viewBox="0 0 24 24"><path d="m20 11.5-8.2 8.2a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/></svg>',
   file: '<svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>',
   book: '<svg viewBox="0 0 24 24"><path d="M5 19.5V5a2 2 0 0 1 2-2h12v15H7a2 2 0 0 0-2 2 2 2 0 0 0 2 2h12v-4"/><path d="M12 6.5v6M9.5 8.8h5"/></svg>',
 };
@@ -673,6 +676,11 @@ const churchRoutes = [
   [/^\/galeria\/([0-9a-f-]{36})$/, viewAlbum],
   [/^\/galeria\/([0-9a-f-]{36})\/editar$/, viewAlbumForm],
   [/^\/galeria\/([0-9a-f-]{36})\/foto\/([0-9a-f-]{36})$/, viewGalleryPhoto],
+  [/^\/chat$/, viewChat],
+  [/^\/chat\/novo$/, viewChatForm],
+  [/^\/chat\/([0-9a-f-]{36})$/, viewChatRoom],
+  [/^\/chat\/([0-9a-f-]{36})\/info$/, viewChatInfo],
+  [/^\/chat\/([0-9a-f-]{36})\/adicionar$/, viewChatAdd],
   [/^\/carteirinha$/, viewCard],
   [/^\/carteirinha\/verificar\/([0-9a-f-]{36})$/, viewCardVerify],
 ];
@@ -684,6 +692,8 @@ async function render() {
   const [path, qs] = raw.split('?');
   const ctx = { params: new URLSearchParams(qs || ''), path, alive: () => id === renderId };
   renderTabbar(path);
+  // Saiu da conversa: para de receber as mensagens na hora.
+  if (chatLive && !path.startsWith(`/chat/${chatLive.group}`)) chatClose();
   document.getElementById('notif-link').classList.toggle('active', path === '/notificacoes');
   if (path !== '/notificacoes') refreshUnread().catch(() => {});
   const routes = state.church ? churchRoutes : rootRoutes;
@@ -1023,6 +1033,7 @@ async function viewChurchHome() {
     ['salas_tutor', icon.users, 'Salas', '#/salas'],
     ['carteirinha', icon.idcard, 'Carteirinha', '#/carteirinha'],
     ['galeria', icon.image, 'Galeria', '#/galeria'],
+    ['chat', icon.chat, 'Chat', '#/chat'],
     ['pix', icon.pix, 'Pix', '#/pix'],
   ].filter(([k]) => (k === 'pix' ? offerReady() : k === 'aniversarios' ? datesOn() : k === 'salas_tutor' ? roomsTeam() : featureOn(k)));
   $view.innerHTML = `
@@ -1111,6 +1122,7 @@ async function viewMenu() {
         ${featureOn('salas') ? `<a class="menu-row" href="#/filhos">${icon.child}<span>Meus filhos</span>${icon.chevron}</a>` : ''}
         ${roomsTeam() ? `<a class="menu-row" href="#/salas">${icon.users}<span>${isLeaderRole(m.role) ? 'Salas das crianças' : 'Minhas salas'}</span>${icon.chevron}</a>` : ''}
         ${featureOn('galeria') ? `<a class="menu-row" href="#/galeria">${icon.image}<span>Galeria de fotos</span>${icon.chevron}</a>` : ''}
+        ${featureOn('chat') ? `<a class="menu-row" href="#/chat">${icon.chat}<span>Chat</span>${icon.chevron}</a>` : ''}
         ${featureOn('carteirinha') ? `<a class="menu-row" href="#/carteirinha">${icon.idcard}<span>Minha carteirinha</span>${icon.chevron}</a>` : ''}
         ${offerReady() ? `<a class="menu-row" href="#/pix">${icon.pix}<span>Pix</span>${icon.chevron}</a>` : ''}
         <a class="menu-row" href="#/notificacoes">${icon.bell}<span>Notificações</span>${icon.chevron}</a>
@@ -1172,7 +1184,7 @@ async function viewMyData() {
 
       <section class="card danger-zone">
         <h2>Excluir minha conta</h2>
-        <p>Apaga a sua conta e os seus cadastros em <strong>todas</strong> as instituições de ensino, com fotos, notificações e aparelhos. Não dá para desfazer. Os eventos e avisos que você publicou continuam na instituição de ensino, sem o seu nome.</p>
+        <p>Apaga a sua conta e os seus cadastros em <strong>todas</strong> as instituições de ensino, com fotos, notificações e aparelhos. Não dá para desfazer. Os eventos, os avisos e as mensagens do chat que você publicou continuam na instituição de ensino, sem o seu nome.</p>
         <label>Para confirmar, digite EXCLUIR<input id="confirm-delete" autocomplete="off" autocapitalize="characters"></label>
         <button class="btn danger-outline" id="delete" disabled>Excluir minha conta para sempre</button>
       </section>
@@ -1270,6 +1282,7 @@ function helpTopics() {
          
          ${features('agenda') ? '<li>os lembretes dos eventos da agenda;</li>' : ''}
          ${features('avisos') ? '<li>os avisos que a liderança mandar com notificação (chegam em até uns 15 minutos);</li>' : ''}
+         ${features('chat') ? '<li>as mensagens novas dos seus grupos do chat (o aviso diz só quem escreveu);</li>' : ''}
          
        </ul>
        <p><strong>No iPhone</strong>, as notificações só funcionam com o app instalado na tela inicial. O sininho no topo guarda tudo, mesmo sem ativar no celular.</p>
@@ -1303,6 +1316,18 @@ function helpTopics() {
            <p>Se você aparece numa foto e prefere que ela saia, toque em <em>Pedir para tirar esta foto</em>: quem publica a galeria recebe o pedido.</p>${
              galleryTeam()
                ? `<p><strong>Se você publica na galeria:</strong> toque no botão <strong>+</strong>, embaixo à direita, para criar o álbum e, dentro dele, em <em>Adicionar fotos</em> (dá para escolher várias de uma vez). O app reduz cada foto no celular antes de enviar, para gastar pouco espaço. A instituição de ensino pode ter até ${GALLERY_LIMIT} fotos: apague álbuns antigos quando chegar perto. Evite fotos de crianças em que elas apareçam de perto sem a autorização dos pais.</p>`
+               : ''
+           }`,
+        ]]
+      : []),
+    ...(features('chat')
+      ? [[
+          'Chat em grupos',
+          `<p>Em <a href="#/chat">Menu &gt; Chat</a> ficam os grupos de conversa em que você está. O número ao lado do grupo mostra as mensagens que você ainda não leu.</p>
+           <p>Para escrever, toque na caixa embaixo. O botão <strong>😊</strong> coloca emojis e o <strong>clipe</strong> anexa foto, vídeo, áudio ou documento (até 25 MB cada; para vídeos maiores, mande o link do YouTube ou do Google Drive). Links que você escrever viram links que dá para tocar.</p>
+           <p>Nos grupos com <strong>🔒</strong>, só os administradores enviam mensagens: os outros leem. Para sair de um grupo, toque no nome dele, no topo da conversa, e em <em>Sair do grupo</em>. Você pode apagar as mensagens que mandou.</p>${
+             isLeaderRole(myRole())
+               ? `<p><strong>Para a liderança:</strong> toque no botão <strong>+</strong> da tela do Chat para criar um grupo e escolha quem participa (dá para buscar pelo nome ou selecionar todos). Você vira administrador do grupo. Tocando no nome do grupo, o administrador muda o nome, liga o <em>Só administradores enviam mensagens</em>, adiciona ou tira pessoas, escolhe outros administradores, apaga mensagens de qualquer pessoa e apaga o grupo. Os anexos da instituição de ensino podem ocupar até 500 MB no total.</p>`
                : ''
            }`,
         ]]
@@ -1413,7 +1438,7 @@ function helpTopics() {
          <li><strong>Aparência:</strong> nome, nome curto (o que aparece embaixo do ícone), logo e cores. Logo em PNG com fundo transparente fica melhor; escolha o fundo do ícone. Se a cor for clara demais, o app avisa.</li>
          <li><strong>Textos e redes sociais:</strong> boas-vindas, sobre a instituição de ensino, endereço e links.</li>
          <li><strong>Pix:</strong> o tipo e a chave Pix da instituição de ensino e o nome do recebedor. Prefira o CNPJ ou uma chave aleatória: a chave fica visível para qualquer pessoa.</li>
-         <li><strong>Funcionalidades:</strong> ligue ou desligue os aniversários, a agenda e o calendário, os avisos, Meus filhos e as salas das crianças, a carteirinha digital, a galeria de fotos e o Pix.</li>
+         <li><strong>Funcionalidades:</strong> ligue ou desligue os aniversários, a agenda e o calendário, os avisos, Meus filhos e as salas das crianças, a carteirinha digital, a galeria de fotos, o chat em grupos e o Pix.</li>
          <li><strong>Privacidade:</strong> o e-mail para pedidos sobre dados pessoais e, se quiser, um complemento da política.</li>
        </ul>
        <p>O nome e o ícone do app instalado mudam em até 15 minutos, quando o site é publicado de novo sozinho. Até lá, o botão de instalar avisa que o ícone está sendo preparado. Quem já instalou pode precisar reinstalar para ver o ícone novo.</p>`,
@@ -1553,12 +1578,6 @@ async function viewProfile(ctx) {
         }
         <label class="check"><input type="checkbox" name="show_phone" ${m.show_phone ? 'checked' : ''}> Meu telefone</label>
       </fieldset>
-      ${
-        featureOn('chat')
-          ? `<label class="check"><input type="checkbox" name="chat_enabled" ${m.chat_enabled !== false ? 'checked' : ''}> Receber mensagens pelo chat
-              <small class="hint">Desligado, ninguém começa conversa nova com você nem escreve nas antigas. Você continua vendo e respondendo as conversas que já tem.</small></label>`
-          : ''
-      }
       <button class="btn primary big">Salvar</button>
       <p class="hint">Para trocar o e-mail, fale com a secretaria da instituição de ensino.</p>
     </form>`;
@@ -1579,7 +1598,6 @@ async function viewProfile(ctx) {
         birth_date: form.birth_date.value || null,
         show_birthday: form.show_birthday.checked,
         show_phone: form.show_phone.checked,
-        ...(form.chat_enabled ? { chat_enabled: form.chat_enabled.checked } : {}),
         ...specialDatesPatch(form, true),
       };
       if (photo.file) patch.photo_path = await uploadMemberPhoto(m.church_id, m.id, photo.file);
@@ -4017,6 +4035,692 @@ async function viewCardVerify(ctx, token) {
 }
 
 // ---------------------------------------------------------------------
+// Chat em grupos: a liderança cria os grupos e coloca as pessoas; quem administra o grupo pode
+// deixá-lo só para os administradores escreverem. Mensagens com emojis, links e anexos.
+// As regras ficam no banco (supabase/020_chat.sql); o que chega na hora vem pelo Realtime.
+// ---------------------------------------------------------------------
+const CHAT_FILE_LIMIT = 25 * 1024 * 1024; // o banco confere (chat_file_limit)
+const CHAT_PAGE = 50;
+// Os tipos que a pasta "chat" aceita (o banco confere).
+const CHAT_TYPES = /^(image\/(jpeg|png|webp|gif|heic|heif)|video\/(mp4|quicktime|webm|3gpp)|audio\/(mpeg|mp4|aac|ogg|webm|wav|x-m4a)|application\/(pdf|zip|msword|vnd\.ms-excel|vnd\.ms-powerpoint|vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|spreadsheetml\.sheet|presentationml\.presentation))|text\/(plain|csv))$/;
+const CHAT_ACCEPT = 'image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip';
+const canCreateGroups = () => featureOn('chat') && isLeaderRole(myRole());
+let chatLive = null; // conversa aberta recebendo as mensagens na hora: { group, channel }
+
+function chatClose() {
+  if (!chatLive) return;
+  sb.removeChannel(chatLive.channel);
+  chatLive = null;
+}
+
+async function loadChatGroups() {
+  const { data, error } = await sb.rpc('chat_group_list', { p_church: state.church.id });
+  if (error) throw error;
+  return data;
+}
+
+async function viewChat(ctx) {
+  if (!requireMemberFeature('/chat', 'chat')) return;
+  await screenShow(ctx, 'chat', loadChatGroups, drawChatGroups);
+}
+
+function chatPreview(g) {
+  if (!g.last_body && !g.last_file) return esc(g.description || 'Nenhuma mensagem ainda');
+  return `${esc(firstName(g.last_author || 'Ex-membro'))}: ${g.last_body ? esc(g.last_body) : `📎 ${esc(g.last_file)}`}`;
+}
+
+function drawChatGroups(groups) {
+  const create = canCreateGroups();
+  $view.innerHTML = `
+    <div class="page">
+      <h1>Chat</h1>
+      ${
+        groups.length
+          ? `<div class="list chat-list">${groups
+              .map(
+                (g) => `
+          <a class="chat-row ${g.unread ? 'unread' : ''}" href="#/chat/${g.id}">
+            ${avatar(g.name, null)}
+            <span class="chat-row-text"><strong>${esc(g.name)}${g.locked ? ' <span title="Só administradores enviam">🔒</span>' : ''}</strong><small>${chatPreview(g)}</small></span>
+            <span class="chat-row-side">${g.last_body || g.last_file ? `<small>${esc(notifTime(g.last_message_at))}</small>` : ''}${
+              g.unread ? `<span class="chat-unread" aria-label="${g.unread} não lidas">${g.unread > 99 ? '99+' : g.unread}</span>` : ''
+            }</span>
+          </a>`,
+              )
+              .join('')}</div>`
+          : `<div class="empty"><p>Você ainda não está em nenhum grupo.${
+              create ? ' Toque no <strong>+</strong> para criar o primeiro.' : ' Quando a liderança colocar você num grupo, ele aparece aqui.'
+            }</p></div>`
+      }
+      ${create ? fab('#/chat/novo', 'Novo grupo') : ''}
+    </div>`;
+}
+
+// Conversa: o grupo, os participantes e as últimas mensagens (as mais antigas por último na busca).
+async function loadChatRoom(id) {
+  const [g, people, msgs] = await Promise.all([
+    sb.from('chat_groups').select('id, name, description, locked').eq('id', id).maybeSingle(),
+    sb.rpc('chat_group_members', { p_group: id }),
+    chatMessagesQuery(id),
+  ]);
+  for (const r of [g, people, msgs]) if (r.error) throw r.error;
+  return { group: g.data, people: people.data || [], messages: msgs.data.reverse(), more: msgs.data.length === CHAT_PAGE };
+}
+const CHAT_FIELDS = 'id, author_id, body, file_path, file_name, file_type, file_size, file_ready, created_at';
+function chatMessagesQuery(id, before = null) {
+  let q = sb.from('chat_messages').select(CHAT_FIELDS).eq('group_id', id).order('created_at', { ascending: false }).limit(CHAT_PAGE);
+  if (before) q = q.lt('created_at', before);
+  return q;
+}
+const chatFiles = (data) => (data.messages || []).filter((m) => m.file_path && m.file_ready).map((m) => m.file_path);
+const chatMe = (data) => data.people.find((p) => p.is_me) || null;
+
+async function viewChatRoom(ctx, id) {
+  if (!requireMemberFeature(`/chat/${id}`, 'chat')) return;
+  await showWithGalleryLinks(ctx, `chat:${id}`, () => loadChatRoom(id), chatFiles, (data, urls) => drawChatRoom(id, data, urls), 'chat');
+  if (!ctx.alive() || !screenCached(`chat:${id}`)?.group) return;
+  chatListen(id);
+  markChatRead(id);
+}
+
+function chatDay(iso) {
+  const d = new Date(iso);
+  const days = Math.round((parseIso(isoLocal(new Date())) - parseIso(isoLocal(d))) / 864e5);
+  if (days === 0) return 'Hoje';
+  if (days === 1) return 'Ontem';
+  return d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', ...(days > 300 ? { year: 'numeric' } : {}) });
+}
+
+function chatFileHtml(m, url) {
+  const name = esc(m.file_name || 'arquivo');
+  if (!m.file_ready) return `<span class="msg-doc">${icon.upload}<span>${name}<small>Enviando…</small></span></span>`;
+  if (!url) return `<span class="msg-doc">${icon.file}<span>${name}<small>${esc(fmtBytes(m.file_size))}</small></span></span>`;
+  const type = m.file_type || '';
+  if (/^image\/(jpeg|png|webp|gif)$/.test(type))
+    return `<a class="msg-img" href="${esc(url)}" target="_blank" rel="noopener"><img src="${esc(url)}" alt="${name}" loading="lazy"></a>`;
+  if (/^video\//.test(type)) return `<video class="msg-video" src="${esc(url)}" controls preload="metadata" playsinline></video>`;
+  if (/^audio\//.test(type)) return `<audio class="msg-audio" src="${esc(url)}" controls preload="none"></audio>`;
+  return `<a class="msg-doc" href="${esc(url)}" target="_blank" rel="noopener">${icon.file}<span>${name}<small>${esc(fmtBytes(m.file_size))} · Abrir</small></span></a>`;
+}
+
+function chatMessagesHtml(data, urls) {
+  const me = chatMe(data);
+  const names = new Map(data.people.map((p) => [p.member_id, p.name]));
+  let html = data.more ? '<button type="button" class="btn chat-older" id="chat-older">Ver mensagens anteriores</button>' : '';
+  if (!data.messages.length) html += '<p class="chat-empty">Nenhuma mensagem ainda. Diga olá! 👋</p>';
+  let day = '';
+  let prevAuthor = null;
+  for (const m of data.messages) {
+    const d = chatDay(m.created_at);
+    if (d !== day) {
+      html += `<p class="chat-day"><span>${esc(d)}</span></p>`;
+      day = d;
+      prevAuthor = null;
+    }
+    const mine = !!me && m.author_id === me.member_id;
+    const who = m.author_id ? names.get(m.author_id) || 'Ex-participante' : 'Ex-membro';
+    const del = mine || me?.is_admin;
+    html += `
+      <div class="msg ${mine ? 'mine' : ''}" data-id="${m.id}">
+        ${!mine && prevAuthor !== (m.author_id || '-') ? `<span class="msg-author">${esc(who)}</span>` : ''}
+        ${m.file_path ? chatFileHtml(m, urls[m.file_path]) : ''}
+        ${m.body ? `<p class="msg-text">${linkify(m.body)}</p>` : ''}
+        <span class="msg-meta">${esc(new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }))}${
+          del ? `<button type="button" class="msg-del" data-del="${m.id}" aria-label="Apagar mensagem" title="Apagar">${icon.trash}</button>` : ''
+        }</span>
+      </div>`;
+    prevAuthor = m.author_id || '-';
+  }
+  return html;
+}
+
+// Desenha a conversa. Quando a tela já está aberta, troca só as mensagens (o que a pessoa está
+// escrevendo continua no lugar).
+function drawChatRoom(id, data, urls = {}) {
+  if (!data.group) {
+    chatClose();
+    $view.innerHTML = `<div class="empty"><h2>Grupo não encontrado</h2><p>Você pode ter saído ou o grupo foi apagado.</p><a class="btn" href="#/chat">Voltar</a></div>`;
+    return;
+  }
+  const me = chatMe(data);
+  const canSend = !!me && (!data.group.locked || me.is_admin);
+  let room = document.getElementById('chat-room');
+  const first = !room || room.dataset.group !== id;
+  if (first) {
+    $view.innerHTML = `
+      <div class="chat-room" id="chat-room" data-group="${id}">
+        <header class="chat-head">
+          <a href="#/chat" class="chat-back" aria-label="Voltar para o chat">←</a>
+          <a class="chat-title" href="#/chat/${id}/info" aria-label="Dados do grupo">
+            <strong id="chat-name"></strong><small id="chat-sub"></small>
+          </a>
+        </header>
+        <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-compose-slot" id="chat-compose"></div>
+      </div>`;
+    room = document.getElementById('chat-room');
+  }
+  document.getElementById('chat-name').textContent = data.group.name;
+  document.getElementById('chat-sub').textContent = `${data.group.locked ? '🔒 Só administradores enviam · ' : ''}${data.people.length} ${data.people.length === 1 ? 'participante' : 'participantes'}`;
+
+  const list = document.getElementById('chat-messages');
+  const nearBottom = first || window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 160;
+  list.innerHTML = chatMessagesHtml(data, urls);
+  if (nearBottom) window.scrollTo(0, document.documentElement.scrollHeight);
+
+  list.querySelectorAll('[data-del]').forEach((b) => (b.onclick = () => chatDelete(id, b.dataset.del)));
+  document.getElementById('chat-older')?.addEventListener('click', (e) => chatOlder(id, e.currentTarget));
+
+  const slot = document.getElementById('chat-compose');
+  const mode = canSend ? 'send' : 'locked';
+  if (slot.dataset.mode !== mode) {
+    slot.dataset.mode = mode;
+    slot.innerHTML = canSend ? chatComposeHtml() : '<p class="chat-locked">🔒 Só os administradores do grupo enviam mensagens.</p>';
+    if (canSend) bindChatCompose(id);
+  }
+}
+
+function chatComposeHtml() {
+  return `
+    <form class="chat-compose" id="chat-form" autocomplete="off">
+      <div class="chat-emojis" id="chat-emojis" hidden>${CHAT_EMOJIS.map((e) => `<button type="button" data-emoji="${e}" aria-label="${e}">${e}</button>`).join('')}</div>
+      <p class="hint" id="chat-status" aria-live="polite"></p>
+      <div class="chat-bar">
+        <button type="button" class="chat-btn" id="chat-emoji-btn" aria-label="Emojis" aria-expanded="false">😊</button>
+        <label class="chat-btn" aria-label="Anexar foto, vídeo ou arquivo" title="Anexar">${icon.clip}<input type="file" id="chat-file" accept="${CHAT_ACCEPT}" hidden></label>
+        <textarea name="body" rows="1" maxlength="4000" placeholder="Mensagem" aria-label="Mensagem"></textarea>
+        <button class="chat-btn send" aria-label="Enviar">${icon.send}</button>
+      </div>
+    </form>`;
+}
+
+function bindChatCompose(id) {
+  const form = document.getElementById('chat-form');
+  const text = form.body;
+  const grow = () => {
+    text.style.height = 'auto';
+    text.style.height = `${Math.min(text.scrollHeight, 160)}px`;
+  };
+  text.addEventListener('input', grow);
+  // No computador, Enter envia (Shift+Enter pula linha); no celular, o botão envia.
+  text.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && matchMedia('(pointer: fine)').matches) {
+      e.preventDefault();
+      form.requestSubmit();
+    }
+  });
+  const panel = document.getElementById('chat-emojis');
+  const emojiBtn = document.getElementById('chat-emoji-btn');
+  emojiBtn.onclick = () => {
+    panel.hidden = !panel.hidden;
+    emojiBtn.setAttribute('aria-expanded', String(!panel.hidden));
+  };
+  panel.onclick = (e) => {
+    const b = e.target.closest('[data-emoji]');
+    if (!b) return;
+    const [a, z] = [text.selectionStart ?? text.value.length, text.selectionEnd ?? text.value.length];
+    text.value = text.value.slice(0, a) + b.dataset.emoji + text.value.slice(z);
+    text.selectionStart = text.selectionEnd = a + b.dataset.emoji.length;
+    grow();
+  };
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = text.value.trim();
+    if (!body) return text.focus();
+    const btn = form.querySelector('.send');
+    btn.disabled = true;
+    const { data, error } = await sb.rpc('chat_send', { p_group: id, p_body: body });
+    btn.disabled = false;
+    if (error) return toast(errorText(error), 'error');
+    text.value = '';
+    grow();
+    panel.hidden = true;
+    const row = data[0];
+    chatPut(id, { id: row.id, author_id: chatMeId(id), body, file_path: null, file_name: null, file_type: null, file_size: null, file_ready: false, created_at: row.created_at }, true);
+    chatPush(row.id);
+  });
+  document.getElementById('chat-file').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    const caption = text.value.trim();
+    const status = document.getElementById('chat-status');
+    status.textContent = `Enviando ${file.name}…`;
+    try {
+      await chatSendFile(id, file, caption);
+      text.value = '';
+      grow();
+      status.textContent = '';
+    } catch (err) {
+      status.textContent = '';
+      toast(errorText(err), 'error');
+    }
+  });
+}
+
+const chatMeId = (id) => chatMe(screenCached(`chat:${id}`) || { people: [] })?.member_id || null;
+
+// Foto: reduzida no aparelho (fica leve); vídeo, áudio e documento vão como estão (até 25 MB).
+async function chatSendFile(id, file, caption) {
+  let blob = file;
+  let type = file.type || '';
+  let name = (file.name || 'arquivo').slice(-120);
+  if (/^image\/(jpeg|png|webp|heic|heif)$/.test(type)) {
+    try {
+      blob = await resizeImage(file, 1600, 0.82);
+      type = blob.type;
+      name = `${name.replace(/\.\w+$/, '')}.${type === 'image/webp' ? 'webp' : 'jpg'}`;
+    } catch {
+      blob = file; // o navegador não abre este formato (ex.: HEIC fora do iPhone): vai como está
+    }
+  }
+  if (!CHAT_TYPES.test(type)) throw new Error('Esse tipo de arquivo não vai no chat. Mande fotos, vídeos, áudios, PDF, documentos do Office, texto ou ZIP.');
+  if (blob.size > CHAT_FILE_LIMIT) throw new Error(`O arquivo tem ${fmtBytes(blob.size)} e o limite é 25 MB. Para vídeos maiores, mande o link (YouTube, Google Drive).`);
+  const ext = (name.match(/\.([a-z0-9]{1,8})$/i)?.[1] || 'bin').toLowerCase();
+  const { data, error } = await sb.rpc('chat_send', {
+    p_group: id, p_body: caption || null, p_file_name: name, p_file_type: type, p_file_size: blob.size, p_ext: ext,
+  });
+  if (error) throw error;
+  const row = data[0];
+  const msg = { id: row.id, author_id: chatMeId(id), body: caption || null, file_path: row.file_path, file_name: name, file_type: type, file_size: blob.size, file_ready: false, created_at: row.created_at };
+  chatPut(id, msg, true);
+  const { error: upErr } = await sb.storage.from('chat').upload(row.file_path, blob, { contentType: type, cacheControl: '3600' });
+  if (upErr) {
+    await sb.from('chat_messages').delete().eq('id', row.id);
+    chatDrop(id, row.id);
+    throw upErr;
+  }
+  const { error: readyErr } = await sb.rpc('chat_file_ready', { p_message: row.id });
+  if (readyErr) throw readyErr;
+  chatPut(id, { ...msg, file_ready: true }, true);
+  chatPush(row.id);
+}
+
+// Guarda a mensagem (nova ou atualizada) na conversa e redesenha, se ela estiver aberta.
+function chatPut(id, msg, toBottom = false) {
+  const data = screenCached(`chat:${id}`);
+  if (!data) return;
+  const i = data.messages.findIndex((m) => m.id === msg.id);
+  if (i >= 0) data.messages[i] = { ...data.messages[i], ...msg };
+  else data.messages.push(msg);
+  data.messages.sort((a, b) => a.created_at.localeCompare(b.created_at));
+  chatRepaint(id, data, toBottom);
+}
+function chatDrop(id, msgId) {
+  const data = screenCached(`chat:${id}`);
+  if (!data) return;
+  data.messages = data.messages.filter((m) => m.id !== msgId);
+  chatRepaint(id, data);
+}
+async function chatRepaint(id, data, toBottom = false) {
+  screenUpdate(`chat:${id}`, data);
+  if (location.hash !== `#/chat/${id}`) return;
+  const urls = await galleryUrls(chatFiles(data), 'chat').catch(() => ({}));
+  if (location.hash !== `#/chat/${id}`) return;
+  drawChatRoom(id, data, urls);
+  if (toBottom) window.scrollTo(0, document.documentElement.scrollHeight);
+}
+
+// Mensagens que chegam enquanto a conversa está aberta (Realtime, com as regras do banco).
+function chatListen(id) {
+  if (chatLive?.group === id) return;
+  chatClose();
+  const channel = sb
+    .channel(`chat:${id}`)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `group_id=eq.${id}` }, (p) => chatArrived(id, p.new))
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_messages', filter: `group_id=eq.${id}` }, (p) => chatArrived(id, p.new))
+    // Apagadas: o aviso traz só o código da mensagem (e não dá para filtrar por grupo).
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'chat_messages' }, (p) => p.old?.id && chatDrop(id, p.old.id))
+    // Conectou (ou reconectou): busca o que chegou entre abrir a conversa e a conexão ficar pronta.
+    .subscribe((status) => status === 'SUBSCRIBED' && chatRefresh(id));
+  chatLive = { group: id, channel };
+}
+
+async function chatRefresh(id) {
+  const fresh = await loadChatRoom(id).catch(() => null);
+  const data = screenCached(`chat:${id}`);
+  if (!fresh || !data || chatLive?.group !== id) return;
+  // Mantém as mensagens antigas já carregadas e as que ainda estão sendo enviadas daqui.
+  const known = new Set(fresh.messages.map((m) => m.id));
+  const oldest = fresh.messages[0]?.created_at ?? '';
+  const keep = data.messages.filter((m) => !known.has(m.id) && (m.created_at < oldest || (m.file_path && !m.file_ready)));
+  const merged = { ...fresh, messages: [...keep, ...fresh.messages].sort((a, b) => a.created_at.localeCompare(b.created_at)), more: data.more && fresh.more };
+  if (JSON.stringify(merged) === JSON.stringify(data)) return;
+  const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 160;
+  chatRepaint(id, merged, atBottom);
+}
+
+async function chatArrived(id, row) {
+  const data = screenCached(`chat:${id}`);
+  if (!data || !row?.id) return;
+  const mine = row.author_id && row.author_id === chatMe(data)?.member_id;
+  if (row.file_path && !row.file_ready && !mine) return;
+  // Alguém que entrou depois de a conversa abrir: busca os participantes de novo.
+  if (row.author_id && !data.people.some((p) => p.member_id === row.author_id)) {
+    const { data: people } = await sb.rpc('chat_group_members', { p_group: id });
+    if (people) data.people = people;
+  }
+  const msg = Object.fromEntries(CHAT_FIELDS.split(', ').map((k) => [k, row[k] ?? null]));
+  const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 160;
+  chatPut(id, msg, atBottom);
+  if (location.hash === `#/chat/${id}` && document.visibilityState === 'visible') markChatRead(id);
+}
+
+async function chatOlder(id, btn) {
+  const data = screenCached(`chat:${id}`);
+  if (!data?.messages.length) return;
+  btn.disabled = true;
+  const { data: rows, error } = await chatMessagesQuery(id, data.messages[0].created_at);
+  if (error) {
+    btn.disabled = false;
+    return toast(errorText(error), 'error');
+  }
+  const known = new Set(data.messages.map((m) => m.id));
+  data.messages = [...rows.reverse().filter((m) => !known.has(m.id)), ...data.messages];
+  data.more = rows.length === CHAT_PAGE;
+  // Mantém na tela a mensagem que estava no topo.
+  const before = document.documentElement.scrollHeight;
+  await chatRepaint(id, data);
+  window.scrollTo(0, window.scrollY + document.documentElement.scrollHeight - before);
+}
+
+async function chatDelete(id, msgId) {
+  const data = screenCached(`chat:${id}`);
+  const msg = data?.messages.find((m) => m.id === msgId);
+  if (!msg || !(await ask('Apagar esta mensagem para todos do grupo?'))) return;
+  if (msg.file_path) await sb.storage.from('chat').remove([msg.file_path]).catch(() => {});
+  const { error } = await sb.from('chat_messages').delete().eq('id', msgId);
+  if (error) return toast(errorText(error), 'error');
+  chatDrop(id, msgId);
+  screenForget('chat');
+}
+
+// Lidas: zera o número da conversa na lista (na hora) e avisa o banco.
+let chatReadTimer;
+function markChatRead(id) {
+  const list = screenCached('chat');
+  const g = list?.find((x) => x.id === id);
+  if (g?.unread) {
+    g.unread = 0;
+    screenUpdate('chat', list);
+  }
+  clearTimeout(chatReadTimer);
+  chatReadTimer = setTimeout(() => sb.rpc('chat_mark_read', { p_group: id }).then(() => {}, () => {}), 500);
+}
+
+// Aviso no celular de quem está no grupo (Edge Function enviar-push). Diz só quem escreveu.
+async function chatPush(messageId) {
+  try {
+    const { data } = await sb.auth.getSession();
+    if (!data.session) return;
+    await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/enviar-push`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: CONFIG.SUPABASE_ANON_KEY, Authorization: `Bearer ${data.session.access_token}` },
+      body: JSON.stringify({ chat: messageId }),
+    });
+  } catch {}
+}
+
+// Mensagem nova chegou pelo aviso do celular com o app aberto: atualiza a lista do chat.
+navigator.serviceWorker?.addEventListener('message', (e) => {
+  if (e.data?.type === 'push' && /#\/chat/.test(e.data.url || '') && location.hash === '#/chat') render();
+});
+// Voltando ao app com a conversa aberta: busca o que chegou enquanto estava fechado.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && /^#\/chat(\/[0-9a-f-]{36})?$/.test(location.hash)) render();
+});
+
+// Dados do grupo: participantes, administradores, bloquear e apagar.
+async function viewChatInfo(ctx, id) {
+  if (!requireMemberFeature(`/chat/${id}/info`, 'chat')) return;
+  await screenShow(ctx, `chat:${id}`, () => loadChatRoom(id), (data) => drawChatInfo(id, data));
+}
+
+function drawChatInfo(id, data) {
+  if (!data.group) {
+    $view.innerHTML = `<div class="empty"><h2>Grupo não encontrado</h2><a class="btn" href="#/chat">Voltar</a></div>`;
+    return;
+  }
+  const me = chatMe(data);
+  const admin = !!me?.is_admin;
+  const g = data.group;
+  $view.innerHTML = `
+    <div class="page">
+      <a href="#/chat/${id}" class="back">← Conversa</a>
+      <h1>${esc(g.name)}</h1>
+      ${g.description ? `<p class="pre">${esc(g.description)}</p>` : ''}
+      ${
+        admin
+          ? `<form class="form card" id="group-form">
+              <h2>Editar o grupo</h2>
+              <label>Nome do grupo<input name="name" required minlength="2" maxlength="60" value="${esc(g.name)}"></label>
+              <label>Descrição (opcional)<textarea name="description" maxlength="300" rows="2">${esc(g.description || '')}</textarea></label>
+              <label class="check"><input type="checkbox" name="locked" ${g.locked ? 'checked' : ''}> Só administradores enviam mensagens
+                <small class="hint">Os outros participantes leem, mas não escrevem. Bom para recados da direção.</small></label>
+              <button class="btn primary">Salvar</button>
+            </form>`
+          : g.locked
+            ? '<p class="notice">🔒 Neste grupo, só os administradores enviam mensagens.</p>'
+            : ''
+      }
+      <section class="card">
+        <h2>${data.people.length} ${data.people.length === 1 ? 'participante' : 'participantes'}</h2>
+        ${admin ? `<a class="btn" href="#/chat/${id}/adicionar">${icon.plus} Adicionar pessoas</a>` : ''}
+        <ul class="chat-people">
+          ${data.people
+            .map(
+              (p) => `
+            <li>
+              ${avatar(p.name, null)}
+              <span class="chat-person">${esc(p.name)}${p.is_me ? ' (você)' : ''}${p.is_admin ? ' <span class="tag role">Administrador</span>' : ''}</span>
+              ${
+                admin && !p.is_me
+                  ? `<span class="chat-person-actions">
+                      ${p.inst_admin ? '' : `<button type="button" class="btn small" data-admin="${p.member_id}" data-on="${!p.is_admin}">${p.is_admin ? 'Tirar de administrador' : 'Tornar administrador'}</button>`}
+                      <button type="button" class="btn small danger-outline" data-remove="${p.member_id}" data-name="${esc(p.name)}">Tirar</button>
+                    </span>`
+                  : ''
+              }
+            </li>`,
+            )
+            .join('')}
+        </ul>
+      </section>
+      ${me ? '<button class="btn danger-outline" id="leave-group">Sair do grupo</button>' : ''}
+      ${admin ? '<button class="btn danger-outline" id="delete-group">Apagar o grupo</button>' : ''}
+    </div>`;
+
+  const after = (msg) => {
+    screenForget(`chat:${id}`);
+    screenForget('chat');
+    toast(msg);
+    render();
+  };
+  document.getElementById('group-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.currentTarget;
+    const { error } = await sb
+      .from('chat_groups')
+      .update({ name: f.name.value.trim(), description: f.description.value.trim() || null, locked: f.locked.checked })
+      .eq('id', id);
+    if (error) return toast(errorText(error), 'error');
+    after('Grupo salvo.');
+  });
+  $view.querySelectorAll('[data-admin]').forEach(
+    (b) =>
+      (b.onclick = async () => {
+        const { error } = await sb.rpc('chat_set_admin', { p_group: id, p_member: b.dataset.admin, p_on: b.dataset.on === 'true' });
+        if (error) return toast(errorText(error), 'error');
+        after(b.dataset.on === 'true' ? 'Agora é administrador do grupo.' : 'Deixou de ser administrador do grupo.');
+      }),
+  );
+  $view.querySelectorAll('[data-remove]').forEach(
+    (b) =>
+      (b.onclick = async () => {
+        if (!(await ask(`Tirar ${b.dataset.name} do grupo?`))) return;
+        const { error } = await sb.rpc('chat_remove_member', { p_group: id, p_member: b.dataset.remove });
+        if (error) return toast(errorText(error), 'error');
+        after('Pessoa tirada do grupo.');
+      }),
+  );
+  document.getElementById('leave-group')?.addEventListener('click', async () => {
+    if (!(await ask('Sair do grupo? Você deixa de ver as mensagens. Para voltar, um administrador precisa colocar você de novo.'))) return;
+    const { error } = await sb.rpc('chat_remove_member', { p_group: id, p_member: me.member_id });
+    if (error) return toast(errorText(error), 'error');
+    chatClose();
+    screenForget(`chat:${id}`);
+    screenForget('chat');
+    toast('Você saiu do grupo.');
+    navigate('/chat');
+  });
+  document.getElementById('delete-group')?.addEventListener('click', async () => {
+    if (!(await ask(`Apagar o grupo "${g.name}"? Todas as mensagens e arquivos são apagados para todos. Não dá para desfazer.`))) return;
+    const { data: files } = await sb.from('chat_messages').select('file_path').eq('group_id', id).not('file_path', 'is', null);
+    const paths = (files || []).map((x) => x.file_path);
+    for (let i = 0; i < paths.length; i += 100) await sb.storage.from('chat').remove(paths.slice(i, i + 100)).catch(() => {});
+    const { error } = await sb.from('chat_groups').delete().eq('id', id);
+    if (error) return toast(errorText(error), 'error');
+    chatClose();
+    screenForget(`chat:${id}`);
+    screenForget('chat');
+    toast('Grupo apagado.');
+    navigate('/chat');
+  });
+}
+
+// Escolher pessoas (para criar o grupo ou adicionar): busca pelo nome e "Selecionar todos".
+async function loadChatCandidates(group) {
+  const { data, error } = await sb.rpc('chat_candidates', { p_church: state.church.id, p_group: group });
+  if (error) throw error;
+  return data;
+}
+
+function pickerHtml(people) {
+  if (!people.length) return '<p class="hint">Ninguém para adicionar: todas as pessoas que já usam o app estão aqui.</p>';
+  return `
+    <div class="picker">
+      <input type="search" id="pick-search" placeholder="Buscar pelo nome" aria-label="Buscar pelo nome">
+      <label class="check pick-all"><input type="checkbox" id="pick-all"> Selecionar todos</label>
+      <ul class="pick-list">${people
+        .map(
+          (p) => `<li data-name="${esc(fold(p.name))}"><label class="check"><input type="checkbox" name="pick" value="${p.member_id}"> <span>${esc(p.name)} <small class="hint">${esc(ROLES[p.role] || '')}</small></span></label></li>`,
+        )
+        .join('')}</ul>
+      <p class="hint" id="pick-count">Ninguém escolhido.</p>
+    </div>`;
+}
+
+function bindPicker(root, keep = []) {
+  const boxes = [...root.querySelectorAll('input[name="pick"]')];
+  const all = root.querySelector('#pick-all');
+  const count = root.querySelector('#pick-count');
+  for (const b of boxes) if (keep.includes(b.value)) b.checked = true;
+  const visible = () => boxes.filter((b) => !b.closest('li').hidden);
+  const update = () => {
+    const n = boxes.filter((b) => b.checked).length;
+    if (count) count.textContent = n ? `${n} ${n === 1 ? 'pessoa escolhida' : 'pessoas escolhidas'}.` : 'Ninguém escolhido.';
+    if (all) all.checked = visible().length > 0 && visible().every((b) => b.checked);
+  };
+  root.querySelector('#pick-search')?.addEventListener('input', (e) => {
+    const q = fold(e.target.value);
+    for (const b of boxes) b.closest('li').hidden = !!q && !b.closest('li').dataset.name.includes(q);
+    update();
+  });
+  all?.addEventListener('change', () => {
+    for (const b of visible()) b.checked = all.checked;
+    update();
+  });
+  for (const b of boxes) b.addEventListener('change', update);
+  update();
+}
+const picked = (root) => [...root.querySelectorAll('input[name="pick"]:checked')].map((b) => b.value);
+
+async function viewChatForm(ctx) {
+  if (!requireMemberFeature('/chat/novo', 'chat')) return;
+  if (!canCreateGroups()) return navigate('/chat');
+  await screenShow(ctx, 'chat:candidatos', () => loadChatCandidates(null), drawChatForm);
+}
+
+function drawChatForm(people) {
+  // Redesenho com a lista nova do banco: mantém o que a pessoa já escreveu e escolheu.
+  const old = document.getElementById('chat-new');
+  const keep = old ? { name: old.name.value, description: old.description.value, locked: old.locked.checked, picks: picked(old) } : null;
+  $view.innerHTML = `
+    <form class="form page" id="chat-new">
+      <a href="#/chat" class="back">← Chat</a>
+      <h1>Novo grupo</h1>
+      <label>Nome do grupo<input name="name" required minlength="2" maxlength="60" placeholder="Ex.: Pais do 5º ano"></label>
+      <label>Descrição (opcional)<textarea name="description" maxlength="300" rows="2" placeholder="Para que serve o grupo"></textarea></label>
+      <label class="check"><input type="checkbox" name="locked"> Só administradores enviam mensagens
+        <small class="hint">Os outros participantes leem, mas não escrevem. Dá para mudar depois.</small></label>
+      <fieldset class="card">
+        <legend>Quem participa</legend>
+        <p class="hint">Você entra como administrador. Aparecem só as pessoas que já usam o app.</p>
+        ${pickerHtml(people)}
+      </fieldset>
+      <button class="btn primary big">Criar grupo</button>
+    </form>`;
+  const form = document.getElementById('chat-new');
+  if (keep) {
+    form.name.value = keep.name;
+    form.description.value = keep.description;
+    form.locked.checked = keep.locked;
+  }
+  bindPicker(form, keep?.picks);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = form.querySelector('button.primary');
+    btn.disabled = true;
+    const { data, error } = await sb.rpc('chat_create_group', {
+      p_church: state.church.id,
+      p_name: form.name.value.trim(),
+      p_description: form.description.value.trim() || null,
+      p_locked: form.locked.checked,
+      p_members: picked(form),
+    });
+    btn.disabled = false;
+    if (error) return toast(errorText(error), 'error');
+    screenForget('chat');
+    toast('Grupo criado.');
+    navigate(`/chat/${data}`);
+  });
+}
+
+async function viewChatAdd(ctx, id) {
+  if (!requireMemberFeature(`/chat/${id}/adicionar`, 'chat')) return;
+  await screenShow(ctx, `chat:candidatos:${id}`, () => loadChatCandidates(id), (people) => drawChatAdd(id, people));
+}
+
+function drawChatAdd(id, people) {
+  const old = document.getElementById('chat-add');
+  const keep = old ? picked(old) : [];
+  $view.innerHTML = `
+    <form class="form page" id="chat-add">
+      <a href="#/chat/${id}/info" class="back">← Grupo</a>
+      <h1>Adicionar pessoas</h1>
+      ${pickerHtml(people)}
+      ${people.length ? '<button class="btn primary big">Adicionar ao grupo</button>' : ''}
+    </form>`;
+  const form = document.getElementById('chat-add');
+  bindPicker(form, keep);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const ids = picked(form);
+    if (!ids.length) return toast('Escolha pelo menos uma pessoa.', 'error');
+    const btn = form.querySelector('button.primary');
+    btn.disabled = true;
+    const { data, error } = await sb.rpc('chat_add_members', { p_group: id, p_members: ids });
+    btn.disabled = false;
+    if (error) return toast(errorText(error), 'error');
+    screenForget(`chat:${id}`);
+    screenForget(`chat:candidatos:${id}`);
+    screenForget('chat');
+    toast(`${data} ${data === 1 ? 'pessoa adicionada' : 'pessoas adicionadas'}.`);
+    navigate(`/chat/${id}/info`);
+  });
+}
+
+// ---------------------------------------------------------------------
 // Galeria de fotos: álbuns só para os membros; publicam a liderança e o ministério marcado
 // ---------------------------------------------------------------------
 const GALLERY_LIMIT = 300; // o banco confere (gallery_limit)
@@ -4846,7 +5550,7 @@ async function viewNotifications(ctx) {
 }
 
 // Convite discreto na página inicial para ativar as notificações (some por 30 dias ao fechar).
-// Aviso de teste para este aparelho (pela mesma função que manda os avisos do chat): mostra
+// Aviso de teste para este aparelho (pela mesma função que avisa as mensagens do chat): mostra
 // se o aviso sai daqui e se o celular deixa aparecer.
 async function sendTestPush(btn) {
   btn.disabled = true;

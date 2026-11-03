@@ -1,6 +1,7 @@
 // Aviso de teste de Menu > Notificações: com o login da pessoa, só para o aparelho dela (a regra do
 // banco só deixa ler os próprios aparelhos). Usa os segredos VAPID_PRIVATE_KEY e ENVIO_SECRET,
-// gravados aqui pelo workflow funcoes.yml. Os outros avisos saem pelo envio dos lembretes.
+// gravados aqui pelo workflow funcoes.yml. Também avisa as mensagens novas do chat (chat).
+// Os outros avisos saem pelo envio dos lembretes.
 import webpush from 'npm:web-push@3.6.7';
 
 const SITE_URL = 'https://cc4flamboyant.github.io/CC4-Flamboyant';
@@ -8,6 +9,7 @@ const ORIGINS = ['https://cc4flamboyant.github.io', 'http://localhost:4173'];
 // Chave pública (a mesma de js/config.js).
 const VAPID_PUBLIC_KEY = 'BJShYv6bENLmIv5Djm9bRmvn_HN5zcuGBC-x9FCIZMa9fNp1_qBeHGZZIa_yGa7teqMd3Du2xDtIPFcs00rNgZw';
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 type Device = { endpoint: string; p256dh: string; auth: string };
 
@@ -42,7 +44,7 @@ Deno.serve(async (req) => {
     return res.status === 204 ? null : res.json();
   };
 
-  let body: { test?: boolean; endpoint?: string; church?: string };
+  let body: { test?: boolean; endpoint?: string; church?: string; chat?: string };
   try {
     body = await req.json();
   } catch {
@@ -95,6 +97,31 @@ Deno.serve(async (req) => {
       ),
     );
     return reply(200, { ...stats, devices: devices.length });
+  }
+
+  if (typeof body.chat === 'string') {
+    // Mensagem nova do chat: com o login de quem enviou. Só sai se a pessoa enxerga a mensagem
+    // (está no grupo) e uma vez por mensagem (o banco tira da fila). O aviso diz só quem escreveu.
+    const auth = req.headers.get('Authorization') ?? '';
+    if (!auth.startsWith('Bearer ') || !UUID.test(body.chat)) return reply(400, { error: 'Pedido inválido.' });
+    const res = await fetch(`${url}/rest/v1/chat_messages?select=id&id=eq.${body.chat}`, { headers: { apikey: anon, Authorization: auth } });
+    if (!res.ok) return reply(401, { error: 'Entre na sua conta.' });
+    if (!(await res.json()).length) return reply(404, { error: 'Mensagem não encontrada.' });
+    const rows: (Device & { church_slug: string; group_id: string; group_name: string; author_name: string })[] =
+      (await rpc('claim_chat_push', { p_message: body.chat })) ?? [];
+    await Promise.all(
+      rows.map((d) => {
+        const church = `${SITE_URL}/i/${d.church_slug}/`;
+        return send(d, {
+          title: d.group_name,
+          body: `${d.author_name} enviou uma mensagem`,
+          url: `${church}#/chat/${d.group_id}`,
+          tag: `chat-${d.group_id}`,
+          icon: `${church}icon-192.png`,
+        });
+      }),
+    );
+    return reply(200, { ...stats, devices: rows.length });
   }
 
   return reply(400, { error: 'Pedido inválido.' });

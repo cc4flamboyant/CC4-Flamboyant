@@ -1,6 +1,6 @@
 // Funções puras do app, testadas sem navegador.
 import { test, expect } from '@playwright/test';
-import { slugify, isValidSlug, churchSlugFromPath, churchRestUrl, inkOn, readableOnWhite, darkPalette, contrastRatio, normalizeHex, normalizePhone, fmtPhone, esc, cardTokenFrom } from '../js/util.js';
+import { slugify, isValidSlug, churchSlugFromPath, churchRestUrl, inkOn, readableOnWhite, darkPalette, contrastRatio, normalizeHex, normalizePhone, fmtPhone, esc, cardTokenFrom, linkify, fmtBytes } from '../js/util.js';
 import { pixPayload, normalizePixKey, guessPixType, crc16, parseAmount } from '../js/pix.js';
 
 test('endereço da igreja a partir do nome', () => {
@@ -278,3 +278,13 @@ test('perguntas usam a janela do app (ask), não a do navegador, que mostra o en
   }
 });
 
+
+test('links do chat: só http e https viram link; o resto é texto escapado', () => {
+  expect(linkify('Veja https://exemplo.com/a?b=1.')).toBe('Veja <a href="https://exemplo.com/a?b=1" target="_blank" rel="noopener noreferrer nofollow">https://exemplo.com/a?b=1</a>.');
+  expect(linkify('www.escola.com.br')).toContain('href="https://www.escola.com.br"');
+  expect(linkify('javascript:alert(1) <b>oi</b>')).toBe('javascript:alert(1) &lt;b&gt;oi&lt;/b&gt;');
+  expect(linkify('https://x.com/"><script>')).not.toContain('<script>');
+  expect(linkify('(https://a.com)')).toContain('>https://a.com</a>)');
+  expect(fmtBytes(5000)).toBe('5 KB');
+  expect(fmtBytes(3355443)).toBe('3,2 MB');
+});
