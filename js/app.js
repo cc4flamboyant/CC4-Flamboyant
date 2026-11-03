@@ -6079,12 +6079,9 @@ function drawYearCalendars(all) {
 async function viewYearCalendarForm(ctx, id) {
   if (!requireMemberFeature(`/agenda/calendarios/${id}/editar`, 'agenda')) return;
   if (!isLeaderRole(myRole())) return navigate('/agenda');
-  const k = await editItem(
-    ctx,
-    screenCached('calendarios:todos')?.find((x) => x.id === id),
-    async () => (await loadAllYearCalendars()).find((x) => x.id === id),
-    () => screenForget('calendarios:todos'),
-  );
+  // Abre na hora com o guardado da lista e não se redesenha depois: um arquivo escolhido
+  // não pode sumir porque o banco respondeu (o salvar confere tudo no banco).
+  const k = screenCached('calendarios:todos')?.find((x) => x.id === id) || (await loadAllYearCalendars().catch(() => [])).find((x) => x.id === id);
   if (!ctx.alive()) return;
   if (!k) {
     toast('Calendário não encontrado.', 'error');

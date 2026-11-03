@@ -92,6 +92,9 @@ test('a liderança edita o calendário: nome e ano, e troca o arquivo', async ({
   const shot = await page.screenshot();
   await page.setViewportSize({ width: 412, height: 915 });
   await page.getByLabel('Trocar o arquivo (opcional)').setInputFiles({ name: 'novo.png', mimeType: 'image/png', buffer: shot });
+  // O formulário não pode ter perdido o que foi escolhido.
+  await expect(page.getByLabel('Ano')).toHaveValue(String(year));
+  expect(await page.getByLabel('Trocar o arquivo (opcional)').evaluate((el) => el.files.length)).toBe(1);
   await page.getByRole('button', { name: 'Salvar' }).click();
   await expect(page).toHaveURL(/#\/agenda\/calendarios$/, { timeout: 30000 });
   await expect(rows).toHaveCount(1);
