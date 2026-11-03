@@ -1299,6 +1299,7 @@ function helpTopics() {
       `<p>Em <a href="#/notificacoes">Menu &gt; Notificações</a>, toque em <em>Ativar neste aparelho</em>. Você recebe:</p>
        <ul class="bullets">
          ${features('aniversarios') ? '<li>a mensagem da instituição de ensino no dia do seu aniversário, às 7h;</li>' : ''}
+         ${features('aniversarios') && features('salas') ? '<li>a mesma mensagem no aniversário dos seus filhos (pela data de nascimento em Meus filhos), às 7h;</li>' : ''}
          
          ${features('agenda') ? '<li>os lembretes dos eventos da agenda;</li>' : ''}
          ${features('avisos') ? '<li>os avisos que a liderança mandar com notificação (chegam em até uns 15 minutos);</li>' : ''}
@@ -1481,7 +1482,8 @@ function helpTopics() {
           'Mensagem de aniversário',
           `<p>Em <a href="#/config/aniversario">Menu &gt; Mensagem de aniversário</a>, escreva o título e o texto. Toque nos campos para colocar no texto: <code>{nome}</code>, <code>{primeiro_nome}</code>, <code>{instituicao}</code> e <code>{idade}</code>. A prévia mostra como fica. Para alegrar, toque nos emojis embaixo (🎂 🎉 🎓…) ou use os do teclado do celular.</p>
            <p>A mensagem sai às 7h (horário de Brasília). Quem nasceu em 29/02 recebe em 28/02 nos anos que não são bissextos. Você pode pôr uma imagem e ligar o <strong>resumo para a liderança</strong> (aniversariantes do dia e, às segundas, os da semana).</p>
-           <p>Ela vai por notificação no celular (para quem ativou), fica na central do app e vai por e-mail para quem tem e-mail no cadastro.</p>`,
+           <p>Ela vai por notificação no celular (para quem ativou), fica na central do app e vai por e-mail para quem tem e-mail no cadastro.</p>
+           ${features('salas') ? '<p>No aniversário das crianças (data de nascimento no cadastro dos filhos), o responsável recebe a mesma mensagem com o nome e a idade da criança, no celular e na central do app.</p>' : ''}`,
         ]]
       : []),
     [
@@ -6591,7 +6593,7 @@ async function pushInvite(el, { title = 'Receba as mensagens da instituição de
 // Textos da tela de cada mensagem.
 const MESSAGE_SCREEN = {
   aniversario: {
-    intro: 'Vai às 7h (horário de Brasília) para quem faz aniversário. Quem nasceu em 29/02 recebe em 28/02 nos anos que não são bissextos.',
+    intro: 'Vai às 7h (horário de Brasília) para quem faz aniversário e, no aniversário das crianças, para o responsável (com o nome e a idade da criança). Quem nasceu em 29/02 recebe em 28/02 nos anos que não são bissextos.',
     send: 'Enviar a mensagem de aniversário',
     fields: MESSAGE_FIELDS,
     fieldsHint: '{idade} é a idade que a pessoa completa.',

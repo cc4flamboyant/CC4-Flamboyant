@@ -451,6 +451,17 @@ test.describe('Agenda, avisos e central de notificações (005)', () => {
       expect((await rpc('adm-a', fn, { p_secret: 'errada' })).ok(), fn).toBe(false);
     }
   });
+
+  test('aniversário dos filhos (025): o envio só com a senha; a lista e o registro ficam fechados', async () => {
+    // Recusa pela senha (não por não existir: 404 seria o 025 faltando no banco).
+    for (const [fn, extra] of [['deliver_child_birthday_notifications', {}], ['claim_child_birthday_push', {}], ['mark_child_birthday_failed', { p_log_id: 1 }]]) {
+      const res = await rpc('adm-a', fn, { p_secret: 'errada', ...extra });
+      expect(res.ok(), fn).toBe(false);
+      expect(res.status(), fn).not.toBe(404);
+    }
+    expect((await rpc('adm-a', 'child_birthday_candidates', { p_day: '2026-01-01' })).ok()).toBe(false);
+    expect((await api.get(rest('child_birthday_log?select=id'), { headers: as['adm-a'].headers })).ok()).toBe(false);
+  });
 });
 
 test.describe('Os próprios dados: exportar, sair e excluir (006)', () => {

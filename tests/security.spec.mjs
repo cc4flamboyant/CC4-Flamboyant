@@ -94,6 +94,11 @@ test.describe('Banco: visitante sem login (aniversários)', () => {
     for (const fn of ['claim_event_reminders', 'claim_announcement_push', 'deliver_birthday_notifications', 'clean_notifications']) {
       expect((await rpc(request, fn, { p_secret: 'errada' })).ok(), fn).toBe(false);
     }
+    for (const fn of ['deliver_child_birthday_notifications', 'claim_child_birthday_push']) {
+      expect((await rpc(request, fn, { p_secret: 'errada' })).ok(), fn).toBe(false);
+    }
+    expect((await rpc(request, 'mark_child_birthday_failed', { p_secret: 'errada', p_log_id: 1 })).ok()).toBe(false);
+    expect((await rpc(request, 'child_birthday_candidates', { p_day: '2026-01-01' })).ok()).toBe(false);
     expect((await rpc(request, 'events_between', { p_church: UUID, p_from: '2027-01-01T00:00:00Z', p_to: '2027-01-31T00:00:00Z' })).ok()).toBe(false);
     for (const fn of ['export_my_data', 'delete_my_account']) expect((await rpc(request, fn)).ok(), fn).toBe(false);
     // O relógio (007) usa a chave do GitHub: nada dele pode ser chamado de fora.

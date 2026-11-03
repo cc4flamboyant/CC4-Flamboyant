@@ -102,6 +102,25 @@ for (const r of byLog(await rpc('claim_birthday_push'))) {
 }
 
 // ---------------------------------------------------------------------
+// 2b. Aniversário dos filhos: o mesmo texto de aniversário, com o nome e a idade
+//     da criança, para o responsável (central do app e push; abre em "Meus filhos")
+// ---------------------------------------------------------------------
+const inAppKids = await rpc('deliver_child_birthday_notifications');
+for (const r of byLog(await rpc('claim_child_birthday_push'))) {
+  const data = { name: r.name, church: r.church_name, age: r.age };
+  const msg = {
+    title: renderMessage(r.title, data),
+    body: renderMessage(r.body, data),
+    url: churchUrl(r.church_slug, '#/filhos'),
+    tag: `aniversario-filho-${r.log_id}`,
+    icon: churchUrl(r.church_slug, 'icon-192.png'),
+    image: r.image_url || undefined,
+  };
+  const results = await Promise.all(r.subs.map((s) => push(s, msg)));
+  if (!results.some(Boolean)) await rpc('mark_child_birthday_failed', { p_log_id: r.log_id });
+}
+
+// ---------------------------------------------------------------------
 // 3. E-mail de aniversário (só com provedor configurado), dentro do limite diário
 // ---------------------------------------------------------------------
 function emailHtml(r, title, body) {
@@ -203,5 +222,5 @@ await rpc('clean_notifications');
 await rpc('clean_kids');
 
 // Só números: nada de nome ou endereço de aparelho no registro público do GitHub.
-console.log(`Aniversários e datas especiais: ${inApp} na central do app, ${stats.push} push, ${stats.email} e-mail(s), ${backlog} e-mail(s) para amanhã, ${stats.gone} aparelho(s) removido(s), ${stats.failed} falha(s).`);
+console.log(`Aniversários e datas especiais: ${inApp} na central do app (${inAppKids} de filhos), ${stats.push} push, ${stats.email} e-mail(s), ${backlog} e-mail(s) para amanhã, ${stats.gone} aparelho(s) removido(s), ${stats.failed} falha(s).`);
 if (stats.failed && !stats.push && !stats.email) process.exit(1);
