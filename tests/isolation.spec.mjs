@@ -1084,6 +1084,37 @@ test.describe('Ícone do grupo do chat (021)', () => {
   });
 });
 
+test.describe('Chat: responder citando (026)', () => {
+  const ids = {};
+  test.afterAll(async () => {
+    for (const g of [ids.g1, ids.g2].filter(Boolean)) await api.delete(rest(`chat_groups?id=eq.${g}`), { headers: as['lider-a'].headers });
+  });
+  test('responde só a mensagem do mesmo grupo; a citação some se a original for apagada', async () => {
+    const make = async (name) => {
+      const res = await rpc('lider-a', 'chat_create_group', { p_church: church.a, p_name: name, p_description: null, p_locked: false, p_members: [] });
+      expect(res.ok(), await res.text()).toBe(true);
+      return await res.json();
+    };
+    ids.g1 = await make(`resp-${Date.now()} 1`);
+    ids.g2 = await make(`resp-${Date.now()} 2`);
+    const send = async (group, body, reply) =>
+      rpc('lider-a', 'chat_send', { p_group: group, p_body: body, ...(reply ? { p_reply_to: reply } : {}) });
+    const [orig] = await (await send(ids.g1, 'Original')).json();
+    // De outro grupo: recusa.
+    expect((await send(ids.g2, 'Resposta de fora', orig.id)).ok()).toBe(false);
+    const res = await send(ids.g1, 'Resposta', orig.id);
+    expect(res.ok(), await res.text()).toBe(true);
+    const [answer] = await res.json();
+    const read = async () => (await get('lider-a', `chat_messages?select=reply_to,reply:reply_to(body)&id=eq.${answer.id}`))[0];
+    expect(await read()).toEqual({ reply_to: orig.id, reply: { body: 'Original' } });
+    // Outra instituição não lê nada.
+    expect(await get('adm-b', `chat_messages?select=id&id=in.(${orig.id},${answer.id})`)).toEqual([]);
+    // A original apagada: a resposta fica, sem a citação.
+    expect((await api.delete(rest(`chat_messages?id=eq.${orig.id}`), { headers: as['lider-a'].headers })).ok()).toBe(true);
+    expect(await read()).toEqual({ reply_to: null, reply: null });
+  });
+});
+
 test.describe('Projetos das salas (021)', () => {
   const tag = `proj-${Date.now()}`;
   const ids = {};

@@ -119,17 +119,28 @@ test('o vídeo abre em tela cheia no app, com Voltar e o campo para escrever sob
   const viewer = page.getByRole('dialog', { name: 'Vídeo' });
   await expect(viewer).toBeVisible();
   await expect(viewer.locator('video')).toBeVisible();
-  // Escreve sobre o vídeo sem sair dele.
+  // Escreve sobre o vídeo sem sair dele: vai como resposta citando o vídeo.
+  await expect(viewer.getByText('Respondendo ao seu vídeo')).toBeVisible();
   await viewer.getByRole('textbox', { name: 'Escreva sobre o vídeo' }).fill('Que passeio lindo! 🎉');
   await viewer.getByRole('button', { name: 'Enviar' }).click();
-  await expect(page.getByText('Mensagem enviada.')).toBeVisible();
+  await expect(page.getByText('Resposta enviada.')).toBeVisible();
   await expect(viewer).toBeVisible();
   await expect(viewer.getByRole('textbox', { name: 'Escreva sobre o vídeo' })).toHaveValue('');
   // Voltar (botão flutuante): volta para a conversa, com a mensagem.
   await viewer.getByRole('button', { name: 'Voltar para a conversa' }).click();
   await expect(viewer).toHaveCount(0);
   await expect(page).toHaveURL(new RegExp(`#/chat/${g.id}$`));
-  await expect(page.locator('.msg.mine').last()).toContainText('Que passeio lindo! 🎉');
+  const reply = page.locator('.msg.mine').last();
+  await expect(reply).toContainText('Que passeio lindo! 🎉');
+  // A citação mostra quem mandou e que era um vídeo; tocar leva até o vídeo (com destaque).
+  const quote = reply.locator('.msg-quote');
+  await expect(quote).toContainText('Você');
+  await expect(quote).toContainText('🎥 Vídeo');
+  await quote.click();
+  await expect(page.locator('.msg.flash').locator('video.msg-video')).toHaveCount(1);
+  // Recarregando, a citação continua (vem do banco).
+  await page.reload();
+  await expect(page.locator('.msg.mine').last().locator('.msg-quote')).toContainText('🎥 Vídeo');
 
   // O voltar do celular também fecha o vídeo e fica na conversa.
   await open.click();

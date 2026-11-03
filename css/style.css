@@ -1005,6 +1005,16 @@ body.totem-full #tabbar, body.totem-full .topbar { visibility: hidden; }
 .msg.mine { align-self: flex-end; border-radius: 14px 14px 4px 14px; background: var(--brand-soft); border-color: transparent; }
 .msg-author { display: block; font-size: .8rem; font-weight: 700; color: var(--link); margin-bottom: 2px; }
 .msg-text { margin: 0; white-space: pre-wrap; }
+/* Resposta: a mensagem citada em cima (como no WhatsApp). */
+.msg-quote {
+  display: flex; flex-direction: column; gap: 1px; width: 100%; margin: 2px 0 4px; padding: 5px 9px;
+  border: 0; border-left: 4px solid var(--brand); border-radius: 8px; background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+}
+.msg-quote strong { font-size: .8rem; color: var(--link); }
+.msg-quote span { font-size: .85rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.msg.flash { animation: msg-flash 1.6s ease-out; }
+@keyframes msg-flash { 0%, 40% { box-shadow: 0 0 0 3px var(--brand); } 100% { box-shadow: 0 0 0 3px transparent; } }
 .msg-text a { color: var(--link); }
 .msg-meta { display: flex; justify-content: flex-end; align-items: center; gap: 6px; font-size: .72rem; color: var(--muted); margin-top: 2px; }
 .msg-del { border: 0; background: none; padding: 2px; color: var(--muted); cursor: pointer; display: inline-grid; }
@@ -1036,9 +1046,11 @@ body.totem-full #tabbar, body.totem-full .topbar { visibility: hidden; }
 .viewer-back svg { width: 22px; height: 22px; }
 .viewer-compose {
   position: absolute; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 1;
-  display: flex; align-items: flex-end; gap: 6px; padding: 6px; border-radius: 28px;
+  display: flex; flex-direction: column; gap: 4px; padding: 6px; border-radius: 28px;
   background: rgb(255 255 255 / .14); backdrop-filter: blur(6px);
 }
+.viewer-bar { display: flex; align-items: flex-end; gap: 6px; }
+.viewer-reply { margin: 2px 12px 0; font-size: .82rem; color: rgb(255 255 255 / .85); }
 .viewer-compose textarea {
   flex: 1; min-height: 44px; max-height: 120px; resize: none; margin: 0; padding: 10px 14px; border: 0; border-radius: 22px;
   line-height: 1.35; background: rgb(255 255 255 / .92); color: #1b1e27;

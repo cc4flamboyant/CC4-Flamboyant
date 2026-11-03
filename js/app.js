@@ -4251,7 +4251,8 @@ async function loadChatRoom(id) {
   const messages = msgs.data.reverse().filter((m) => !chatPendingDeletes.has(m.id));
   return { group: g.data, people: people.data || [], messages, more: msgs.data.length === CHAT_PAGE };
 }
-const CHAT_FIELDS = 'id, author_id, body, file_path, file_name, file_type, file_size, file_ready, created_at';
+const CHAT_FIELDS =
+  'id, author_id, body, file_path, file_name, file_type, file_size, file_ready, created_at, reply_to, reply:reply_to(id, author_id, body, file_type, file_name)';
 function chatMessagesQuery(id, before = null) {
   let q = sb.from('chat_messages').select(CHAT_FIELDS).eq('group_id', id).order('created_at', { ascending: false }).limit(CHAT_PAGE);
   if (before) q = q.lt('created_at', before);
@@ -4289,7 +4290,7 @@ function chatFileHtml(m, url) {
     return `<a class="msg-img" href="${esc(url)}" target="_blank" rel="noopener"><img src="${esc(url)}" alt="${name}" loading="lazy"></a>`;
   // Vídeo: a tela cheia é a do app (com Voltar e o campo de escrever), não a do celular.
   if (/^video\//.test(type))
-    return `<span class="msg-video-wrap"><video class="msg-video" src="${esc(url)}" controls controlslist="nofullscreen" disablepictureinpicture preload="metadata" playsinline></video><button type="button" class="msg-video-open" data-video="${esc(url)}" aria-label="Ver o vídeo em tela cheia">${icon.expand}</button></span>`;
+    return `<span class="msg-video-wrap"><video class="msg-video" src="${esc(url)}" controls controlslist="nofullscreen" disablepictureinpicture preload="metadata" playsinline></video><button type="button" class="msg-video-open" data-video="${esc(url)}" data-id="${esc(m.id)}" aria-label="Ver o vídeo em tela cheia">${icon.expand}</button></span>`;
   if (/^audio\//.test(type)) return `<audio class="msg-audio" src="${esc(url)}" controls preload="none"></audio>`;
   return `<a class="msg-doc" href="${esc(url)}" target="_blank" rel="noopener">${icon.file}<span>${name}<small>${esc(fmtBytes(m.file_size))} · Abrir</small></span></a>`;
 }
@@ -4300,11 +4301,13 @@ function chatFileHtml(m, url) {
 // ---------------------------------------------------------------------
 let chatViewer = null;
 
-function openChatVideo(groupId, url, from = null) {
+function openChatVideo(groupId, url, from = null, msgId = null) {
   closeChatVideo(false);
   const data = screenCached(`chat:${groupId}`);
   const me = data && chatMe(data);
   const canSend = !!me && (!data.group?.locked || me.is_admin);
+  const msg = msgId && data?.messages.find((x) => x.id === msgId);
+  const author = !msg ? '' : me && msg.author_id === me.member_id ? 'seu vídeo' : `vídeo de ${firstName(data.people.find((p) => p.member_id === msg.author_id)?.name) || 'alguém'}`;
   const el = document.createElement('div');
   el.className = 'video-viewer';
   el.setAttribute('role', 'dialog');
@@ -4316,8 +4319,9 @@ function openChatVideo(groupId, url, from = null) {
     ${
       canSend
         ? `<form class="viewer-compose" autocomplete="off">
-            <textarea name="body" rows="1" maxlength="4000" placeholder="Escreva sobre o vídeo" aria-label="Escreva sobre o vídeo"></textarea>
-            <button class="chat-btn send" aria-label="Enviar">${icon.send}</button>
+            ${msg ? `<p class="viewer-reply">Respondendo ao ${esc(author)}</p>` : ''}
+            <div class="viewer-bar"><textarea name="body" rows="1" maxlength="4000" placeholder="Escreva sobre o vídeo" aria-label="Escreva sobre o vídeo"></textarea>
+            <button class="chat-btn send" aria-label="Enviar">${icon.send}</button></div>
           </form>`
         : ''
     }`;
@@ -4347,12 +4351,12 @@ function openChatVideo(groupId, url, from = null) {
     if (!body) return text.focus();
     const btn = form.querySelector('.send');
     btn.disabled = true;
-    const error = await chatSendText(groupId, body);
+    const error = await chatSendText(groupId, body, msg ? msg.id : null);
     btn.disabled = false;
     if (error) return toast(errorText(error), 'error');
     text.value = '';
     text.style.height = 'auto';
-    toast('Mensagem enviada.');
+    toast(msg ? 'Resposta enviada.' : 'Mensagem enviada.');
   });
 }
 
@@ -4388,14 +4392,33 @@ function chatVideoTakeOver(video) {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     video.webkitExitFullscreen?.();
   } catch {}
-  openChatVideo(groupId, video.currentSrc || video.src, video);
+  openChatVideo(groupId, video.currentSrc || video.src, video, video.closest('.msg')?.dataset.id);
 }
 document.addEventListener('fullscreenchange', () => chatVideoTakeOver(document.fullscreenElement));
 document.addEventListener('webkitbeginfullscreen', (e) => chatVideoTakeOver(e.target), true);
 
+// O que a citação mostra de uma mensagem: o tipo do anexo e o começo do texto.
+function chatQuoteText(o) {
+  const type = o.file_type || '';
+  const kind = /^video\//.test(type) ? '🎥 Vídeo' : /^image\//.test(type) ? '📷 Foto' : /^audio\//.test(type) ? '🎤 Áudio' : o.file_name ? `📄 ${o.file_name}` : '';
+  const text = (o.body || '').replace(/\s+/g, ' ').trim();
+  const short = text.length > 90 ? `${text.slice(0, 90)}…` : text;
+  return [kind, short].filter(Boolean).join(' · ') || 'Mensagem';
+}
+
+// Resposta: a mensagem original citada em cima (como no WhatsApp); tocar leva até ela.
+function chatQuoteHtml(m, byId, names, me) {
+  const o = byId.get(m.reply_to) || m.reply;
+  if (!o) return '';
+  const who = me && o.author_id === me.member_id ? 'Você' : o.author_id ? names.get(o.author_id) || 'Ex-participante' : 'Ex-membro';
+  return `<button type="button" class="msg-quote" data-goto="${esc(o.id)}" aria-label="${esc(`Resposta a ${who}: ${chatQuoteText(o)}. Tocar para ver a mensagem`)}">
+    <strong>${esc(who)}</strong><span>${esc(chatQuoteText(o))}</span></button>`;
+}
+
 function chatMessagesHtml(data, urls) {
   const me = chatMe(data);
   const names = new Map(data.people.map((p) => [p.member_id, p.name]));
+  const byId = new Map(data.messages.map((x) => [x.id, x]));
   let html = data.more ? '<button type="button" class="btn chat-older" id="chat-older">Ver mensagens anteriores</button>' : '';
   const deletable = data.messages.some((m) => (me && m.author_id === me.member_id) || me?.is_admin);
   if (deletable) html += `<p class="hint swipe-hint chat-swipe-hint">Arraste ${me?.is_admin ? 'uma mensagem' : 'uma mensagem sua'} para a esquerda para apagar.</p>`;
@@ -4415,6 +4438,7 @@ function chatMessagesHtml(data, urls) {
     const bubble = `
       <div class="msg ${mine ? 'mine' : ''} ${del ? 'swipe-row' : ''}" data-id="${m.id}">
         ${!mine && prevAuthor !== (m.author_id || '-') ? `<span class="msg-author">${esc(who)}</span>` : ''}
+        ${m.reply_to ? chatQuoteHtml(m, byId, names, me) : ''}
         ${m.file_path ? chatFileHtml(m, urls[m.file_path]) : ''}
         ${m.body ? `<p class="msg-text">${linkify(m.body)}</p>` : ''}
         <span class="msg-meta">${esc(new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }))}</span>
@@ -4460,7 +4484,9 @@ function drawChatRoom(id, data, urls = {}) {
     const msgs = document.getElementById('chat-messages');
     msgs.addEventListener('click', (e) => {
       const open = e.target.closest('.msg-video-open');
-      if (open) openChatVideo(id, open.dataset.video, open.parentElement.querySelector('video'));
+      if (open) return openChatVideo(id, open.dataset.video, open.parentElement.querySelector('video'), open.dataset.id);
+      const quote = e.target.closest('.msg-quote');
+      if (quote) chatGoTo(quote.dataset.goto);
     });
     // Reserva embaixo a altura do campo de escrever (que cresce com o texto e os emojis).
     const slot = document.getElementById('chat-compose');
@@ -4563,12 +4589,23 @@ function bindChatCompose(id) {
 
 const chatMeId = (id) => chatMe(screenCached(`chat:${id}`) || { people: [] })?.member_id || null;
 
+// Leva até a mensagem citada e a destaca por um instante.
+function chatGoTo(msgId) {
+  const target = document.querySelector(`#chat-messages .msg[data-id="${CSS.escape(msgId)}"]`);
+  if (!target) return toast('A mensagem é mais antiga: toque em "Ver mensagens anteriores", no alto da conversa.');
+  target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  target.classList.remove('flash');
+  void target.offsetWidth;
+  target.classList.add('flash');
+  setTimeout(() => target.classList.remove('flash'), 1600);
+}
+
 // Envia um texto ao grupo (do campo da conversa ou do vídeo em tela cheia). Devolve o erro, se houver.
-async function chatSendText(id, body) {
-  const { data, error } = await sb.rpc('chat_send', { p_group: id, p_body: body });
+async function chatSendText(id, body, replyTo = null) {
+  const { data, error } = await sb.rpc('chat_send', { p_group: id, p_body: body, ...(replyTo ? { p_reply_to: replyTo } : {}) });
   if (error) return error;
   const row = data[0];
-  chatPut(id, { id: row.id, author_id: chatMeId(id), body, file_path: null, file_name: null, file_type: null, file_size: null, file_ready: false, created_at: row.created_at }, true);
+  chatPut(id, { id: row.id, author_id: chatMeId(id), body, file_path: null, file_name: null, file_type: null, file_size: null, file_ready: false, created_at: row.created_at, reply_to: replyTo }, true);
   chatPush(row.id);
   return null;
 }
