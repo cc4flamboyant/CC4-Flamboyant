@@ -1104,6 +1104,9 @@ body.totem-full #tabbar, body.totem-full .topbar { visibility: hidden; }
 .compose-reply[hidden] { display: none; }
 .compose-reply > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .compose-reply strong { font-size: .82rem; color: var(--link); }
+.compose-reply.editing { border-left-color: #f08c00; }
+.compose-reply.editing strong { color: color-mix(in srgb, #e67700 75%, var(--ink)); }
+.msg-meta em { font-style: italic; }
 .compose-reply small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .compose-reply .chat-btn { width: 36px; height: 36px; background: none; font-size: 1rem; }
 /* Resposta: a mensagem citada em cima (como no WhatsApp). */

@@ -1135,6 +1135,18 @@ test.describe('Quem reagiu e reações no chat (027)', () => {
     // Ninguém grava direto na tabela.
     const direct = await api.post(rest('chat_reactions'), { headers: as['membro-a'].headers, data: { message_id: msg.id, group_id: ids.group, member_id: membro, emoji: '👍' } });
     expect(direct.ok()).toBe(false);
+    // Editar (030): só quem escreveu; texto vazio não; fica marcada como editada.
+    const editMsg = (who, body) => rpc(who, 'chat_edit_message', { p_message: msg.id, p_body: body });
+    expect((await editMsg('membro-a', 'Invadido')).ok()).toBe(false);
+    expect((await editMsg('adm-b', 'Invadido')).ok()).toBe(false);
+    expect((await editMsg('lider-a', '   ')).ok()).toBe(false);
+    expect((await editMsg('lider-a', 'Reaja aqui (editado)')).ok()).toBe(true);
+    const [after] = await get('membro-a', `chat_messages?select=body,edited_at&id=eq.${msg.id}`);
+    expect(after.body).toBe('Reaja aqui (editado)');
+    expect(after.edited_at).not.toBeNull();
+    // Ninguém muda direto na tabela.
+    const direct2 = await api.patch(rest(`chat_messages?id=eq.${msg.id}`), { headers: as['lider-a'].headers, data: { body: 'Direto' } });
+    expect(direct2.ok()).toBe(false);
     // Tirar a reação.
     expect((await react('lider-a', null)).ok()).toBe(true);
     expect((await list('membro-a')).map((r) => r.emoji)).toEqual(['😂']);

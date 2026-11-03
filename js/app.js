@@ -4534,7 +4534,7 @@ async function loadChatRoom(id) {
   return { group: g.data, people: people.data || [], messages, more: msgs.data.length === CHAT_PAGE, reactions: reacts.data || [] };
 }
 const CHAT_FIELDS =
-  'id, author_id, body, file_path, file_name, file_type, file_size, file_ready, created_at, reply_to, reply:reply_to(id, author_id, body, file_type, file_name)';
+  'id, author_id, body, file_path, file_name, file_type, file_size, file_ready, created_at, edited_at, reply_to, reply:reply_to(id, author_id, body, file_type, file_name)';
 function chatMessagesQuery(id, before = null) {
   let q = sb.from('chat_messages').select(CHAT_FIELDS).eq('group_id', id).order('created_at', { ascending: false }).limit(CHAT_PAGE);
   if (before) q = q.lt('created_at', before);
@@ -4775,7 +4775,7 @@ function chatMessagesHtml(data, urls) {
         ${m.reply_to ? chatQuoteHtml(m, byId, names, me) : ''}
         ${m.file_path ? chatFileHtml(m, urls[m.file_path]) : ''}
         ${m.body ? `<p class="msg-text">${linkify(m.body)}</p>` : ''}
-        <span class="msg-meta">${esc(new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }))}</span>
+        <span class="msg-meta">${m.edited_at ? '<em>editada</em> · ' : ''}${esc(new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }))}</span>
         ${chatReactionsHtml(reacts.get(m.id), me)}
       </div>`;
     // Quem pode apagar arrasta a mensagem para a esquerda: o fundo vermelho aparece por trás.
@@ -4832,6 +4832,7 @@ function drawChatRoom(id, data, urls = {}) {
         chatQuoteText(m),
         [
           ...(canReply() && ready ? [['responder', 'Responder', false, 'reply']] : []),
+          ...(canReply() && me && m.author_id === me.member_id && ready ? [['editar', m.body ? 'Editar' : 'Escrever legenda', false, 'pencil']] : []),
           ...(m.body ? [['copiar', 'Copiar texto', false, 'copy']] : []),
           ...(el.closest('.msg-swipe') ? [['apagar', 'Apagar', true, 'trash']] : []),
         ],
@@ -4842,6 +4843,7 @@ function drawChatRoom(id, data, urls = {}) {
         return chatReact(id, m.id, e === current ? null : e);
       }
       if (choice === 'responder') return chatSetReply(id, m.id);
+      if (choice === 'editar') return chatSetEdit(id, m.id);
       if (choice === 'apagar') chatDelete(id, m.id);
       if (choice === 'copiar') {
         navigator.clipboard
@@ -4900,7 +4902,8 @@ function chatComposeHtml() {
 }
 
 function bindChatCompose(id) {
-  chatReply = null; // campo novo (outra conversa): sem resposta pendente
+  chatReply = null; // campo novo (outra conversa): sem resposta nem edição pendente
+  chatEditing = null;
   const form = document.getElementById('chat-form');
   const text = form.body;
   const grow = () => {
@@ -4935,9 +4938,14 @@ function bindChatCompose(id) {
     if (!body) return text.focus();
     const btn = form.querySelector('.send');
     btn.disabled = true;
-    const error = await chatSendText(id, body, chatReplyFor(id));
+    const editing = chatEditFor(id);
+    const error = editing ? await chatEditText(id, editing, body) : await chatSendText(id, body, chatReplyFor(id));
     btn.disabled = false;
     if (error) return toast(errorText(error), 'error');
+    if (editing) {
+      chatSetEdit(id, null);
+      return toast('Mensagem editada.');
+    }
     text.value = '';
     grow();
     panel.hidden = true;
@@ -4969,13 +4977,46 @@ const chatMeId = (id) => chatMe(screenCached(`chat:${id}`) || { people: [] })?.m
 // acima do campo de escrever até enviar ou tocar no ✕.
 let chatReply = null; // { group, id }
 const chatReplyFor = (id) => (chatReply?.group === id ? chatReply.id : null);
+let chatEditing = null; // { group, id }: editando a própria mensagem
+const chatEditFor = (id) => (chatEditing?.group === id ? chatEditing.id : null);
+
+// Editar: o texto vai para o campo de escrever, com a faixa "Editando mensagem" e ✕ para cancelar.
+function chatSetEdit(id, msgId) {
+  const bar = document.getElementById('chat-reply');
+  const text = document.querySelector('#chat-form textarea');
+  const data = screenCached(`chat:${id}`);
+  const m = msgId && data?.messages.find((x) => x.id === msgId);
+  const was = chatEditing;
+  chatEditing = m ? { group: id, id: m.id } : null;
+  if (m) chatReply = null;
+  if (!bar || !text) return;
+  if (!m) {
+    bar.hidden = true;
+    bar.innerHTML = '';
+    bar.classList.remove('editing');
+    if (was) text.value = '';
+    text.dispatchEvent(new Event('input'));
+    return;
+  }
+  bar.innerHTML = `<span><strong>Editando mensagem</strong><small>${esc(chatQuoteText(m))}</small></span>
+    <button type="button" class="chat-btn" id="chat-reply-cancel" aria-label="Cancelar a edição">✕</button>`;
+  bar.classList.add('editing');
+  bar.hidden = false;
+  bar.querySelector('#chat-reply-cancel').onclick = () => chatSetEdit(id, null);
+  text.value = m.body || '';
+  text.dispatchEvent(new Event('input'));
+  text.focus();
+  text.setSelectionRange(text.value.length, text.value.length);
+}
 
 function chatSetReply(id, msgId) {
   const bar = document.getElementById('chat-reply');
   const data = screenCached(`chat:${id}`);
   const m = msgId && data?.messages.find((x) => x.id === msgId);
+  if (m && chatEditing) chatSetEdit(id, null);
   chatReply = m ? { group: id, id: m.id } : null;
   if (!bar) return;
+  bar.classList.remove('editing');
   if (!m) {
     bar.hidden = true;
     bar.innerHTML = '';
@@ -5050,6 +5091,23 @@ function swipeRightReply(list, onReply) {
     window.addEventListener('pointercancel', up);
   });
   list.addEventListener('click', (e) => dragging && e.preventDefault(), true);
+}
+
+// Salva a edição: muda na tela na hora; se o banco recusar, volta como estava.
+async function chatEditText(id, msgId, body) {
+  const data = screenCached(`chat:${id}`);
+  const m = data?.messages.find((x) => x.id === msgId);
+  if (!m) return new Error('Mensagem não encontrada.');
+  if (body === (m.body || '')) return null;
+  const before = { body: m.body, edited_at: m.edited_at };
+  chatPut(id, { id: msgId, body, edited_at: new Date().toISOString() });
+  const { data: at, error } = await sb.rpc('chat_edit_message', { p_message: msgId, p_body: body });
+  if (error) {
+    chatPut(id, { id: msgId, ...before });
+    return error;
+  }
+  chatPut(id, { id: msgId, edited_at: at });
+  return null;
 }
 
 // Leva até a mensagem citada e a destaca por um instante.

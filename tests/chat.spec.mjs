@@ -163,6 +163,30 @@ test('a liderança cria o grupo, escolhe quem participa e escreve com emoji, lin
   await expect(replyBar).toContainText('Respondendo pelo arrasto');
   await page.getByRole('button', { name: 'Cancelar a resposta' }).click();
 
+  // Editar a própria mensagem (030): o texto vai para o campo; salvar mostra "editada".
+  await answered.locator('.msg-text').click({ delay: 700 });
+  await page.getByRole('menuitem', { name: 'Editar' }).click();
+  await expect(replyBar).toContainText('Editando mensagem');
+  await expect(box).toHaveValue('Respondendo pelo arrasto');
+  await box.fill('Respondendo e editando');
+  await Promise.all([
+    page.waitForResponse((r) => r.url().includes('rpc/chat_edit_message') && r.ok()),
+    page.getByRole('button', { name: 'Enviar' }).click(),
+  ]);
+  await expect(page.getByText('Mensagem editada.')).toBeVisible();
+  await expect(replyBar).toBeHidden();
+  await expect(box).toHaveValue('');
+  const edited = page.locator('.msg').filter({ hasText: 'Respondendo e editando' });
+  await expect(edited.locator('.msg-meta')).toContainText('editada');
+  await expect(edited.locator('.msg-quote')).toContainText('Bom dia, turma'); // a citação continua
+  await page.reload();
+  await expect(edited.locator('.msg-meta')).toContainText('editada');
+  // Cancelar a edição devolve o campo vazio.
+  await edited.locator('.msg-text').click({ delay: 700 });
+  await page.getByRole('menuitem', { name: 'Editar' }).click();
+  await page.getByRole('button', { name: 'Cancelar a edição' }).click();
+  await expect(box).toHaveValue('');
+
   // Anexo (documento): aparece como arquivo para abrir.
   await page.locator('#chat-file').setInputFiles({ name: 'lista.txt', mimeType: 'text/plain', buffer: Buffer.from('Material da semana') });
   await expect(page.locator('.msg.mine').last().locator('.msg-doc')).toContainText('lista.txt');
