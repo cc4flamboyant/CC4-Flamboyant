@@ -4620,10 +4620,13 @@ function chatMessagesHtml(data, urls) {
   }
   let html = data.more ? '<button type="button" class="btn chat-older" id="chat-older">Ver mensagens anteriores</button>' : '';
   const deletable = data.messages.some((m) => (me && m.author_id === me.member_id) || me?.is_admin);
-  if (data.messages.length && me)
-    html += `<p class="hint swipe-hint chat-swipe-hint">Mantenha o dedo pressionado numa mensagem para reagir ou copiar${
-      deletable ? `; para apagar ${me.is_admin ? '' : 'as suas '}também (ou arraste para a esquerda)` : ''
-    }.</p>`;
+  if (data.messages.length && me) {
+    const canSend = !data.group?.locked || me.is_admin;
+    const acts = deletable ? 'reagir, copiar ou apagar' : 'reagir ou copiar';
+    html += `<p class="hint swipe-hint chat-swipe-hint">${
+      canSend ? `Arraste uma mensagem para a direita para responder; mantenha o dedo pressionado para ${acts}.` : `Mantenha o dedo pressionado numa mensagem para ${acts}.`
+    }</p>`;
+  }
   if (!data.messages.length) html += '<p class="chat-empty">Nenhuma mensagem ainda. Diga olá! 👋</p>';
   let day = '';
   let prevAuthor = null;
@@ -4683,7 +4686,10 @@ function drawChatRoom(id, data, urls = {}) {
     room = document.getElementById('chat-room');
     // A lista de mensagens é a mesma enquanto a conversa está aberta: o gesto é ligado uma vez.
     swipeLeft(document.getElementById('chat-messages'), (wrap) => chatDelete(id, wrap.dataset.id));
-    // Manter o dedo pressionado numa mensagem: reagir com emoji, copiar o texto e (quem pode) apagar.
+    // Arrastar para a direita: responder (só quem pode mandar mensagem no grupo).
+    const canReply = () => document.getElementById('chat-compose')?.dataset.mode === 'send';
+    swipeRightReply(document.getElementById('chat-messages'), (msgId) => canReply() && chatSetReply(id, msgId));
+    // Manter o dedo pressionado numa mensagem: reagir com emoji, responder, copiar o texto e (quem pode) apagar.
     longPress(document.getElementById('chat-messages'), '.msg', async (el) => {
       const data = screenCached(`chat:${id}`);
       const m = data?.messages.find((x) => x.id === el.dataset.id);
@@ -4693,13 +4699,18 @@ function drawChatRoom(id, data, urls = {}) {
       const ready = !m.file_path || m.file_ready;
       const choice = await actionMenu(
         chatQuoteText(m),
-        [...(m.body ? [['copiar', 'Copiar texto']] : []), ...(el.closest('.msg-swipe') ? [['apagar', 'Apagar', true]] : [])],
+        [
+          ...(canReply() && ready ? [['responder', 'Responder']] : []),
+          ...(m.body ? [['copiar', 'Copiar texto']] : []),
+          ...(el.closest('.msg-swipe') ? [['apagar', 'Apagar', true]] : []),
+        ],
         { emojis: me && ready ? REACTIONS : null, current },
       );
       if (choice?.startsWith('emoji:')) {
         const e = choice.slice(6);
         return chatReact(id, m.id, e === current ? null : e);
       }
+      if (choice === 'responder') return chatSetReply(id, m.id);
       if (choice === 'apagar') chatDelete(id, m.id);
       if (choice === 'copiar') {
         navigator.clipboard
@@ -4747,6 +4758,7 @@ function chatComposeHtml() {
     <form class="chat-compose" id="chat-form" autocomplete="off">
       <div class="chat-emojis" id="chat-emojis" hidden>${CHAT_EMOJIS.map((e) => `<button type="button" data-emoji="${e}" aria-label="${e}">${e}</button>`).join('')}</div>
       <p class="hint" id="chat-status" aria-live="polite"></p>
+      <div class="compose-reply" id="chat-reply" hidden></div>
       <div class="chat-bar">
         <button type="button" class="chat-btn" id="chat-emoji-btn" aria-label="Emojis" aria-expanded="false">😊</button>
         <label class="chat-btn" aria-label="Anexar foto, vídeo ou arquivo" title="Anexar">${icon.clip}<input type="file" id="chat-file" accept="${CHAT_ACCEPT}" hidden></label>
@@ -4757,6 +4769,7 @@ function chatComposeHtml() {
 }
 
 function bindChatCompose(id) {
+  chatReply = null; // campo novo (outra conversa): sem resposta pendente
   const form = document.getElementById('chat-form');
   const text = form.body;
   const grow = () => {
@@ -4791,12 +4804,13 @@ function bindChatCompose(id) {
     if (!body) return text.focus();
     const btn = form.querySelector('.send');
     btn.disabled = true;
-    const error = await chatSendText(id, body);
+    const error = await chatSendText(id, body, chatReplyFor(id));
     btn.disabled = false;
     if (error) return toast(errorText(error), 'error');
     text.value = '';
     grow();
     panel.hidden = true;
+    chatSetReply(id, null);
   });
   document.getElementById('chat-file').addEventListener('change', async (e) => {
     const file = e.target.files[0];
@@ -4806,7 +4820,8 @@ function bindChatCompose(id) {
     const status = document.getElementById('chat-status');
     status.textContent = `Enviando ${file.name}…`;
     try {
-      await chatSendFile(id, file, caption);
+      await chatSendFile(id, file, caption, chatReplyFor(id));
+      chatSetReply(id, null);
       text.value = '';
       grow();
       status.textContent = '';
@@ -4818,6 +4833,93 @@ function bindChatCompose(id) {
 }
 
 const chatMeId = (id) => chatMe(screenCached(`chat:${id}`) || { people: [] })?.member_id || null;
+
+// Responder: a mensagem escolhida (arrastando para a direita ou pelo menu) fica numa faixa
+// acima do campo de escrever até enviar ou tocar no ✕.
+let chatReply = null; // { group, id }
+const chatReplyFor = (id) => (chatReply?.group === id ? chatReply.id : null);
+
+function chatSetReply(id, msgId) {
+  const bar = document.getElementById('chat-reply');
+  const data = screenCached(`chat:${id}`);
+  const m = msgId && data?.messages.find((x) => x.id === msgId);
+  chatReply = m ? { group: id, id: m.id } : null;
+  if (!bar) return;
+  if (!m) {
+    bar.hidden = true;
+    bar.innerHTML = '';
+    return;
+  }
+  const me = chatMe(data);
+  const who = me && m.author_id === me.member_id ? 'você' : data.people.find((x) => x.member_id === m.author_id)?.name || 'Ex-participante';
+  bar.innerHTML = `<span><strong>Respondendo a ${esc(who)}</strong><small>${esc(chatQuoteText(m))}</small></span>
+    <button type="button" class="chat-btn" id="chat-reply-cancel" aria-label="Cancelar a resposta">✕</button>`;
+  bar.hidden = false;
+  bar.querySelector('#chat-reply-cancel').onclick = () => chatSetReply(id, null);
+  document.querySelector('#chat-form textarea')?.focus();
+}
+
+// Arrastar uma mensagem para a direita: responde a ela (como no WhatsApp). A mensagem acompanha
+// o dedo um pouco e volta ao soltar; passando do ponto, o celular vibra.
+function swipeRightReply(list, onReply) {
+  const MAX = 72;
+  const AT = 56;
+  let msg = null;
+  let startX = 0;
+  let startY = 0;
+  let dx = 0;
+  let dragging = false;
+  list.addEventListener('pointerdown', (e) => {
+    msg = e.button === 0 && !e.target.closest('button, a, video, audio, input, textarea') ? e.target.closest('.msg') : null;
+    startX = e.clientX;
+    startY = e.clientY;
+    dx = 0;
+    dragging = false;
+  });
+  // Mexer e soltar: escuta a página toda (a conversa pode se redesenhar no meio do gesto).
+  const move = (e) => {
+    if (!msg) return;
+    const x = e.clientX - startX;
+    const y = e.clientY - startY;
+    if (!dragging) {
+      if (Math.abs(y) > 10 && Math.abs(y) > Math.abs(x)) return void (msg = null); // está rolando
+      if (x < 10) return;
+      dragging = true;
+      msg.classList.add('replying');
+    }
+    const before = dx;
+    dx = Math.max(0, Math.min(MAX, x));
+    if (before < AT && dx >= AT) navigator.vibrate?.(15);
+    msg.style.transform = `translateX(${dx}px)`;
+  };
+  const end = () => {
+    if (!msg || !list.isConnected) return void (msg = null);
+    const m = msg;
+    msg = null;
+    m.classList.remove('replying');
+    m.style.transform = '';
+    if (!dragging) return;
+    setTimeout(() => (dragging = false));
+    if (dx >= AT) onReply(m.dataset.id);
+  };
+  const stop = () => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    window.removeEventListener('pointercancel', up);
+  };
+  const up = () => {
+    stop();
+    end();
+  };
+  list.addEventListener('pointerdown', () => {
+    if (!msg) return;
+    stop();
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  });
+  list.addEventListener('click', (e) => dragging && e.preventDefault(), true);
+}
 
 // Leva até a mensagem citada e a destaca por um instante.
 function chatGoTo(msgId) {
@@ -4841,7 +4943,7 @@ async function chatSendText(id, body, replyTo = null) {
 }
 
 // Foto: reduzida no aparelho (fica leve); vídeo, áudio e documento vão como estão (até 25 MB).
-async function chatSendFile(id, file, caption) {
+async function chatSendFile(id, file, caption, replyTo = null) {
   let blob = file;
   let type = file.type || '';
   let name = (file.name || 'arquivo').slice(-120);
@@ -4859,10 +4961,11 @@ async function chatSendFile(id, file, caption) {
   const ext = (name.match(/\.([a-z0-9]{1,8})$/i)?.[1] || 'bin').toLowerCase();
   const { data, error } = await sb.rpc('chat_send', {
     p_group: id, p_body: caption || null, p_file_name: name, p_file_type: type, p_file_size: blob.size, p_ext: ext,
+    ...(replyTo ? { p_reply_to: replyTo } : {}),
   });
   if (error) throw error;
   const row = data[0];
-  const msg = { id: row.id, author_id: chatMeId(id), body: caption || null, file_path: row.file_path, file_name: name, file_type: type, file_size: blob.size, file_ready: false, created_at: row.created_at };
+  const msg = { id: row.id, author_id: chatMeId(id), body: caption || null, file_path: row.file_path, file_name: name, file_type: type, file_size: blob.size, file_ready: false, created_at: row.created_at, reply_to: replyTo };
   chatPut(id, msg, true);
   const { error: upErr } = await sb.storage.from('chat').upload(row.file_path, blob, { contentType: type, cacheControl: '3600' });
   if (upErr) {
@@ -6549,7 +6652,7 @@ function swipeLeft(list, onSwipe, onEmpty) {
       if (Math.abs(y) > 10 && Math.abs(y) > Math.abs(x)) return void (row = null); // está rolando a lista
       if (x > -10) return;
       dragging = true;
-      row.setPointerCapture(e.pointerId);
+      try { row.setPointerCapture(e.pointerId); } catch {} // o navegador pode recusar: o gesto segue igual
       row.classList.add('dragging');
     }
     dx = Math.min(0, x);

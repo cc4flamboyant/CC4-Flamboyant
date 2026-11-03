@@ -98,7 +98,7 @@ test('a liderança cria o grupo, escolhe quem participa e escreve com emoji, lin
     .toBe(0);
 
   // Manter o dedo pressionado na própria mensagem: menu com Copiar texto e Apagar (com Desfazer).
-  await expect(page.getByText('Mantenha o dedo pressionado numa mensagem para reagir ou copiar; para apagar também (ou arraste para a esquerda).')).toBeVisible();
+  await expect(page.getByText('Arraste uma mensagem para a direita para responder; mantenha o dedo pressionado para reagir, copiar ou apagar.')).toBeVisible();
   await box.fill('Apagar pressionando');
   await page.getByRole('button', { name: 'Enviar' }).click();
   const pressed = page.locator('.msg-swipe').filter({ hasText: 'Apagar pressionando' });
@@ -131,6 +131,37 @@ test('a liderança cria o grupo, escolhe quem participa e escreve com emoji, lin
   await expect(who.locator('.who-list li')).toContainText('Você');
   await who.getByRole('button', { name: 'Tirar minha reação 🎉' }).click();
   await expect(hello.locator('.msg-reactions')).toHaveCount(0);
+
+  // Arrastar para a direita: responde (faixa "Respondendo a…" com ✕ para cancelar).
+  const dragRight = async (loc) => {
+    await expect(async () => {
+      const b = await loc.boundingBox();
+      if (!b) throw new Error('mensagem ainda sem lugar na tela');
+      const y = b.y + 10; // na primeira linha (a segunda é um link, que não arrasta)
+      await page.mouse.move(b.x + 12, y);
+      await page.mouse.down();
+      for (let i = 1; i <= 10; i++) await page.mouse.move(b.x + 12 + i * 9, y);
+      await page.mouse.up();
+      await expect(page.locator('#chat-reply')).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 15000 });
+  };
+  await dragRight(hello.locator('.msg-text'));
+  const replyBar = page.locator('#chat-reply');
+  await expect(replyBar).toContainText('Respondendo a você');
+  await expect(replyBar).toContainText('Bom dia, turma');
+  await page.getByRole('button', { name: 'Cancelar a resposta' }).click();
+  await expect(replyBar).toBeHidden();
+  await dragRight(hello.locator('.msg-text'));
+  await box.fill('Respondendo pelo arrasto');
+  await page.getByRole('button', { name: 'Enviar' }).click();
+  await expect(replyBar).toBeHidden();
+  const answered = page.locator('.msg').filter({ hasText: 'Respondendo pelo arrasto' });
+  await expect(answered.locator('.msg-quote')).toContainText('Bom dia, turma');
+  // Também pelo menu: Responder.
+  await answered.locator('.msg-text').click({ delay: 700 });
+  await page.getByRole('menuitem', { name: 'Responder' }).click();
+  await expect(replyBar).toContainText('Respondendo pelo arrasto');
+  await page.getByRole('button', { name: 'Cancelar a resposta' }).click();
 
   // Anexo (documento): aparece como arquivo para abrir.
   await page.locator('#chat-file').setInputFiles({ name: 'lista.txt', mimeType: 'text/plain', buffer: Buffer.from('Material da semana') });
@@ -203,7 +234,7 @@ test('o membro vê a mensagem nova; com o grupo bloqueado, só lê', async ({ pa
   await expect(row).toContainText(name);
   await expect(row.locator('.chat-unread')).toBeVisible();
   await row.click();
-  await expect(page.locator('.msg').filter({ hasText: 'Bom dia, turma' })).toBeVisible();
+  await expect(page.locator('.msg-text').filter({ hasText: 'Bom dia, turma' })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Mensagem' })).toBeVisible();
 
   // A líder bloqueia o grupo: só os administradores enviam.

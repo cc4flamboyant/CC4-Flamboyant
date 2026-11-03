@@ -1033,6 +1033,18 @@ body.totem-full #tabbar, body.totem-full .topbar { visibility: hidden; }
 .msg.mine { align-self: flex-end; border-radius: 14px 14px 4px 14px; background: var(--brand-soft); border-color: transparent; }
 .msg-author { display: block; font-size: .8rem; font-weight: 700; color: var(--link); margin-bottom: 2px; }
 .msg-text { margin: 0; white-space: pre-wrap; }
+/* Arrastar para a direita para responder: a mensagem acompanha o dedo e volta ao soltar. */
+.chat-messages .msg { touch-action: pan-y; transition: transform .2s ease; }
+.chat-messages .msg.replying { transition: none; }
+.compose-reply {
+  display: flex; align-items: center; gap: 8px; margin: 0 0 6px; padding: 6px 6px 6px 10px;
+  border-left: 4px solid var(--brand); border-radius: 8px; background: color-mix(in srgb, var(--ink) 6%, var(--surface));
+}
+.compose-reply[hidden] { display: none; }
+.compose-reply > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.compose-reply strong { font-size: .82rem; color: var(--link); }
+.compose-reply small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.compose-reply .chat-btn { width: 36px; height: 36px; background: none; font-size: 1rem; }
 /* Resposta: a mensagem citada em cima (como no WhatsApp). */
 .msg-quote {
   display: flex; flex-direction: column; gap: 1px; width: 100%; margin: 2px 0 4px; padding: 5px 9px;
