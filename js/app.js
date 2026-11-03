@@ -6159,6 +6159,15 @@ function drawYearCalendar(k, urls) {
         <button type="button" class="btn" id="cal-share">${icon.send} Compartilhar</button>
         <button type="button" class="btn" id="cal-download">${icon.upload} Baixar</button>
       </div>
+      ${
+        isLeaderRole(myRole())
+          ? `<section class="card event-manage" aria-label="Gerenciar calendário">
+              <h2>Gerenciar calendário</h2>
+              <a class="menu-row" href="#/agenda/calendarios/${k.id}/editar">${icon.image}<span>Trocar a imagem ou editar<small>Nome, ano e arquivo</small></span>${icon.chevron}</a>
+              <a class="menu-row" href="#/agenda/calendarios">${icon.calendar}<span>Todos os calendários<small>Enviar outro ou apagar</small></span>${icon.chevron}</a>
+            </section>`
+          : ''
+      }
     </div>`;
   if (!pdf && url) bindZoom(document.getElementById('zoom-box'), document.getElementById('zoom-img'));
 

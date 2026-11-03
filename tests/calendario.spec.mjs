@@ -69,6 +69,8 @@ test('o membro abre o calendário na Agenda, com zoom; abre na hora', async ({ p
   await page.getByRole('button', { name: 'Tamanho original' }).click();
   await expect(img).toHaveAttribute('style', /scale\(1\)/);
   await page.unroute('**/rest/v1/**');
+  // O membro só vê: sem o bloco para trocar a imagem.
+  await expect(page.getByRole('heading', { name: 'Gerenciar calendário' })).toHaveCount(0);
 });
 
 test('a liderança edita o calendário: nome e ano, e troca o arquivo', async ({ page }) => {
@@ -101,6 +103,28 @@ test('a liderança edita o calendário: nome e ano, e troca o arquivo', async ({
   await expect(page).toHaveURL(/#\/agenda\/calendarios$/, { timeout: 30000 });
   await expect(rows).toHaveCount(1);
   await expect(rows).toContainText(`${title} ${year}`);
+});
+
+test('a liderança troca a imagem pela própria tela do calendário', async ({ page }) => {
+  await openLoggedIn(page, as['lider-a'].session, '/i/teste-a/#/agenda');
+  await page.locator('#year-calendars a').filter({ hasText: `${title} ${year}` }).click();
+  await expect(page.getByRole('heading', { name: `${title} ${year}` })).toBeVisible();
+  await expect(page.locator('#zoom-img')).toBeVisible({ timeout: 10000 });
+  const oldSrc = await page.locator('#zoom-img').getAttribute('src');
+  await page.getByRole('link', { name: /Trocar a imagem ou editar/ }).click();
+  await expect(page.getByRole('heading', { name: 'Editar calendário' })).toBeVisible();
+  await page.setViewportSize({ width: 600, height: 500 });
+  const shot = await page.screenshot();
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.getByLabel('Trocar o arquivo (opcional)').setInputFiles({ name: 'outra.png', mimeType: 'image/png', buffer: shot });
+  await page.getByRole('button', { name: 'Salvar' }).click();
+  await expect(page).toHaveURL(/#\/agenda\/calendarios$/, { timeout: 30000 });
+  await expect(page.locator('.cal-row').filter({ hasText: title })).toHaveCount(1);
+  // Na Agenda, o calendário abre com a imagem nova.
+  await page.goto('/i/teste-a/#/agenda');
+  await page.locator('#year-calendars a').filter({ hasText: `${title} ${year}` }).click();
+  await expect(page.locator('#zoom-img')).toBeVisible({ timeout: 10000 });
+  expect(await page.locator('#zoom-img').getAttribute('src')).not.toBe(oldSrc);
 });
 
 test('a liderança apaga o calendário', async ({ page }) => {
