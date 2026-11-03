@@ -135,6 +135,15 @@ test('a liderança edita e exclui o aviso mantendo o dedo pressionado; o membro 
   await page.getByRole('button', { name: 'Cancelar' }).click();
   await expect(page.getByRole('menu')).toHaveCount(0);
   await expect(card).toBeVisible();
+  // A janela mostra a prévia do aviso e fecha arrastando a alça para baixo.
+  await card.locator('h2').click({ delay: 700 });
+  await expect(page.locator('dialog.sheet .sheet-preview')).toContainText(title);
+  const handle = await page.locator('dialog.sheet .sheet-handle').boundingBox();
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + 2);
+  await page.mouse.down();
+  for (let i = 1; i <= 8; i++) await page.mouse.move(handle.x + handle.width / 2, handle.y + 2 + i * 20);
+  await page.mouse.up();
+  await expect(page.getByRole('menu')).toHaveCount(0);
   // O membro: pressionar não abre nada e não há dica.
   const member = await (await browser.newContext({ ...test.info().project.use, baseURL: 'http://localhost:4173/' })).newPage();
   await openLoggedIn(member, as['membro-a'].session, '/i/teste-a/#/avisos');

@@ -148,13 +148,46 @@ dialog.ask h2 { margin: 0 0 8px; font-size: 1.05rem; }
 dialog.ask p { margin: 0 0 14px; }
 dialog.ask input { width: 100%; margin-bottom: 14px; }
 dialog.ask .actions-row { justify-content: flex-end; margin: 0; }
-/* Menu de ações (manter pressionado): abre de baixo no celular, com botões largos. */
-dialog.action-menu .action-list { display: flex; flex-direction: column; gap: 8px; }
-dialog.action-menu .action-list .btn { width: 100%; justify-content: center; min-height: 48px; }
-dialog.action-menu h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Menu de ações (manter pressionado) e quem reagiu: janela que sobe de baixo, com alça,
+   prévia do item, emojis numa cápsula e as ações numa lista com ícones. */
+dialog.sheet { padding: 8px 16px 16px; }
+dialog.sheet form { display: flex; flex-direction: column; }
+.sheet-handle { align-self: center; width: 40px; height: 5px; margin: 0 0 12px; border-radius: 999px; background: var(--line); }
+.sheet-preview { margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); }
+.sheet-preview small { display: block; margin-bottom: 2px; font-size: .78rem; font-weight: 700; color: var(--link); }
+.sheet-preview p {
+  margin: 0; font-size: .95rem; line-height: 1.35; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow-wrap: anywhere;
+}
+dialog.sheet h2 { margin: 0 0 10px; font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+dialog.action-menu .action-list {
+  display: flex; flex-direction: column; margin: 0 0 10px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+  background: var(--surface);
+}
+.action-row {
+  display: flex; align-items: center; gap: 14px; width: 100%; min-height: 52px; padding: 0 16px; border: 0;
+  border-top: 1px solid var(--line); background: none; color: var(--ink); font: inherit; font-size: 1rem; text-align: left; cursor: pointer;
+}
+.action-row:first-child { border-top: 0; }
+.action-row svg { width: 22px; height: 22px; color: var(--muted); flex: none; }
+.action-row:hover, .action-row:focus-visible { background: color-mix(in srgb, var(--ink) 5%, transparent); outline: none; }
+.action-row:active { background: color-mix(in srgb, var(--ink) 9%, transparent); }
+.action-row.danger, .action-row.danger svg { color: var(--danger); }
+dialog.reaction-people .action-list { border: 0; gap: 8px; overflow: visible; background: none; }
+dialog.reaction-people .action-list .btn { width: 100%; justify-content: center; min-height: 48px; }
+.sheet-cancel { width: 100%; min-height: 48px; justify-content: center; font-weight: 700; }
+dialog.sheet[open] { animation: sheet-up .22s cubic-bezier(.2, .8, .2, 1); }
+dialog.sheet[open]::backdrop { animation: sheet-fade .22s ease-out; }
+dialog.sheet { transition: transform .2s ease; }
+dialog.sheet.dragging { transition: none; }
+@keyframes sheet-up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes sheet-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  dialog.sheet[open], dialog.sheet[open]::backdrop { animation: none; }
+}
 @media (max-width: 600px) {
-  dialog.action-menu { margin: auto auto 0; width: 100%; max-width: none; border-radius: var(--radius) var(--radius) 0 0;
-    padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
+  dialog.action-menu { margin: auto auto 0; width: 100%; max-width: none; border-radius: 20px 20px 0 0;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
 }
 /* Item que abre o menu ao manter o dedo pressionado: sem seleção de texto nem menu do navegador. */
 .pressable { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; transition: transform .15s; }
@@ -433,11 +466,16 @@ button.member-row { font: inherit; text-align: left; width: 100%; cursor: pointe
 .msg-reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .msg-reactions .reaction { min-height: 28px; padding: 1px 8px; font-size: .9rem; }
 /* Linha de emojis no alto do menu do chat (manter pressionado). */
-dialog.action-menu .action-emojis { display: flex; justify-content: space-between; gap: 4px; margin: 0 0 12px; }
-dialog.action-menu .action-emojis button {
-  flex: 1; min-height: 48px; border: 0; border-radius: 999px; background: none; font-size: 1.6rem; cursor: pointer; line-height: 1;
+dialog.action-menu .action-emojis {
+  display: flex; justify-content: space-between; gap: 2px; margin: 0 0 12px; padding: 6px;
+  border-radius: 999px; background: var(--bg); border: 1px solid var(--line);
 }
-dialog.action-menu .action-emojis button.mine { background: var(--brand-soft); }
+dialog.action-menu .action-emojis button {
+  flex: 1; min-height: 46px; border: 0; border-radius: 999px; background: none; font-size: 1.65rem; cursor: pointer; line-height: 1;
+  transition: transform .12s, background .12s;
+}
+dialog.action-menu .action-emojis button:active { transform: scale(1.25); }
+dialog.action-menu .action-emojis button.mine { background: var(--brand-soft); box-shadow: inset 0 0 0 2px var(--brand); }
 /* Quem reagiu. */
 .who-list { list-style: none; margin: 0 0 14px; padding: 0; max-height: 50vh; overflow-y: auto; }
 .who-list li { display: flex; align-items: center; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--line); }

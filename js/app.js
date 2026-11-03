@@ -388,19 +388,33 @@ function longPress(container, selector, onPress) {
 
 // Menu de ações (abre de baixo no celular): items = [[valor, texto, vermelho?]]. Devolve o valor ou null.
 // Com emojis: uma linha de reações no alto (devolve "emoji:👍"); current é a reação atual da pessoa.
-function actionMenu(title, items, { emojis = null, current = null } = {}) {
+// title: o texto do item (mostrado numa prévia, até 3 linhas); label: quem/quando, acima da prévia.
+// items = [[valor, texto, vermelho?, ícone?]].
+function actionMenu(title, items, { emojis = null, current = null, label = '' } = {}) {
   const dlg = document.createElement('dialog');
-  dlg.className = 'ask action-menu';
+  dlg.className = 'ask action-menu sheet';
+  dlg.setAttribute('aria-label', label ? `${label}: ${title}` : title);
   dlg.innerHTML = `
     <form method="dialog">
-      <h2></h2>
-      ${emojis ? `<div class="action-emojis" role="group" aria-label="Reagir">${emojis.map((e) => `<button class="${e === current ? 'mine' : ''}" value="emoji:${e}" aria-label="Reagir com ${e}${e === current ? ' (tirar)' : ''}" aria-pressed="${e === current}">${e}</button>`).join('')}</div>` : ''}
-      <div class="action-list" role="menu">
-        ${items.map(([v, text, red]) => `<button class="btn${red ? ' danger-outline' : ''}" role="menuitem" value="${esc(v)}">${esc(text)}</button>`).join('')}
-        <button class="btn ghost" value="cancel">Cancelar</button>
-      </div>
+      <span class="sheet-handle" aria-hidden="true"></span>
+      <div class="sheet-preview">${label ? `<small>${esc(label)}</small>` : ''}<p></p></div>
+      ${
+        emojis
+          ? `<div class="action-emojis" role="group" aria-label="Reagir">${emojis
+              .map((e) => `<button class="${e === current ? 'mine' : ''}" value="emoji:${e}" aria-label="Reagir com ${e}${e === current ? ' (tirar)' : ''}" aria-pressed="${e === current}">${e}</button>`)
+              .join('')}</div>`
+          : ''
+      }
+      ${
+        items.length
+          ? `<div class="action-list" role="menu">${items
+              .map(([v, text, red, ic]) => `<button class="action-row${red ? ' danger' : ''}" role="menuitem" value="${esc(v)}">${ic && icon[ic] ? icon[ic] : ''}<span>${esc(text)}</span></button>`)
+              .join('')}</div>`
+          : ''
+      }
+      <button class="btn sheet-cancel" value="cancel">Cancelar</button>
     </form>`;
-  dlg.querySelector('h2').textContent = title;
+  dlg.querySelector('.sheet-preview p').textContent = title;
   document.body.append(dlg);
   return new Promise((resolve) => {
     dlg.addEventListener('close', () => {
@@ -408,11 +422,38 @@ function actionMenu(title, items, { emojis = null, current = null } = {}) {
       dlg.remove();
       resolve(v && v !== 'cancel' ? v : null);
     });
-    // Tocar fora do menu fecha.
+    // Tocar fora do menu ou arrastar para baixo fecha.
     dlg.addEventListener('click', (e) => e.target === dlg && dlg.close('cancel'));
+    sheetDrag(dlg);
     dlg.showModal();
-    dlg.querySelector('[role="menuitem"]')?.focus();
+    (dlg.querySelector('[role="menuitem"]') || dlg.querySelector('.action-emojis button'))?.focus({ preventScroll: true });
   });
+}
+
+// Janela que sobe de baixo: arrastar pela alça (ou pela prévia) para baixo fecha.
+function sheetDrag(dlg) {
+  let startY = null;
+  let dy = 0;
+  dlg.addEventListener('pointerdown', (e) => {
+    if (!e.target.closest('.sheet-handle, .sheet-preview, h2')) return;
+    startY = e.clientY;
+    dy = 0;
+    dlg.classList.add('dragging');
+  });
+  dlg.addEventListener('pointermove', (e) => {
+    if (startY === null) return;
+    dy = Math.max(0, e.clientY - startY);
+    dlg.style.transform = `translateY(${dy}px)`;
+  });
+  const end = () => {
+    if (startY === null) return;
+    startY = null;
+    dlg.classList.remove('dragging');
+    if (dy > 80) return dlg.close('cancel');
+    dlg.style.transform = '';
+  };
+  dlg.addEventListener('pointerup', end);
+  dlg.addEventListener('pointercancel', end);
 }
 
 // Quem reagiu, com o emoji tocado (focus) primeiro. Abre na hora: com people ([{emoji, name, mine}])
@@ -439,15 +480,16 @@ function reactionPeople(focus, { people = null, mine = null, counts = {}, load =
   const total = (list) => (list ? list.length : Object.values(counts).reduce((t, n) => t + n, 0));
   const title = (n) => `Reações · ${n} ${n === 1 ? 'pessoa' : 'pessoas'}`;
   const dlg = document.createElement('dialog');
-  dlg.className = 'ask action-menu reaction-people';
+  dlg.className = 'ask action-menu sheet reaction-people';
   dlg.innerHTML = `
     <form method="dialog">
+      <span class="sheet-handle" aria-hidden="true"></span>
       <h2>${title(total(people))}</h2>
       <div class="who-body">${people ? listHtml(people) : countsHtml()}</div>
       <div class="action-list">
         ${mine ? `<button class="btn danger-outline" value="remove">Tirar minha reação ${mine}</button>` : ''}
         ${focus && mine !== focus ? `<button class="btn" value="react">Reagir com ${focus}</button>` : ''}
-        <button class="btn" value="cancel">Fechar</button>
+        <button class="btn sheet-cancel" value="cancel">Fechar</button>
       </div>
     </form>`;
   document.body.append(dlg);
@@ -458,6 +500,7 @@ function reactionPeople(focus, { people = null, mine = null, counts = {}, load =
       resolve(v === 'react' || v === 'remove' ? v : null);
     });
     dlg.addEventListener('click', (e) => e.target === dlg && dlg.close('cancel'));
+    sheetDrag(dlg);
     dlg.showModal();
     dlg.querySelector('[value="cancel"]').focus();
     // Os nomes chegam do banco: troca na janela, se ela ainda estiver aberta.
@@ -572,6 +615,8 @@ const icon = {
   expand: '<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
   users: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.3a6.5 6.5 0 0 1 3.5 5.7"/></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  reply: '<svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
+  copy: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg>',
   pencil: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></svg>',
   external: '<svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
   trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>',
@@ -3463,10 +3508,14 @@ function announcementMenu(all, box) {
   longPress(box, '.announcement.pressable', async (card) => {
     const a = all.find((x) => x.id === card.dataset.id);
     if (!a) return;
-    const choice = await actionMenu(a.title, [
-      ['editar', 'Editar'],
-      ['excluir', 'Excluir', true],
-    ]);
+    const choice = await actionMenu(
+      a.title,
+      [
+        ['editar', 'Editar', false, 'pencil'],
+        ['excluir', 'Excluir', true, 'trash'],
+      ],
+      { label: `Aviso · ${new Date(a.created_at).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })}` },
+    );
     if (choice === 'editar') return navigate(`/avisos/${a.id}/editar`);
     if (choice !== 'excluir' || !(await ask('Excluir este aviso?'))) return;
     const { data, error: err } = await sb.from('announcements').delete().eq('id', a.id).select('id');
@@ -4760,14 +4809,16 @@ function drawChatRoom(id, data, urls = {}) {
       const me = chatMe(data);
       const current = (data.reactions || []).find((r) => r.message_id === m.id && r.member_id === me?.member_id)?.emoji || null;
       const ready = !m.file_path || m.file_ready;
+      const who = me && m.author_id === me.member_id ? 'Você' : data.people.find((x) => x.member_id === m.author_id)?.name || 'Ex-participante';
+      const hour = new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
       const choice = await actionMenu(
         chatQuoteText(m),
         [
-          ...(canReply() && ready ? [['responder', 'Responder']] : []),
-          ...(m.body ? [['copiar', 'Copiar texto']] : []),
-          ...(el.closest('.msg-swipe') ? [['apagar', 'Apagar', true]] : []),
+          ...(canReply() && ready ? [['responder', 'Responder', false, 'reply']] : []),
+          ...(m.body ? [['copiar', 'Copiar texto', false, 'copy']] : []),
+          ...(el.closest('.msg-swipe') ? [['apagar', 'Apagar', true, 'trash']] : []),
         ],
-        { emojis: me && ready ? REACTIONS : null, current },
+        { emojis: me && ready ? REACTIONS : null, current, label: `${who} · ${hour}` },
       );
       if (choice?.startsWith('emoji:')) {
         const e = choice.slice(6);
