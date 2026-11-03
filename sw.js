@@ -5,7 +5,7 @@
 // Dados do Supabase: sempre da rede.
 // O build (scripts/build-site.mjs) acrescenta ao nome do cache um código do conteúdo do app:
 // qualquer mudança de código gera uma versão nova sozinha.
-const CACHE = 'cc4-v31';
+const CACHE = 'cc4-v32';
 const ANDROID = /android/i.test(self.navigator.userAgent);
 // Service worker de uma instituição de ensino (escopo i/<igreja>/, o mesmo do app instalado) ou da raiz do site.
 const CHURCH_SCOPE = /\/i\/[a-z0-9-]+\/$/.test(new URL(self.registration.scope).pathname);

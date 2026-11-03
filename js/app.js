@@ -335,7 +335,7 @@ function longPress(container, selector, onPress) {
   let timer = null;
   let start = null;
   let fired = false;
-  const skip = (t) => t.closest('button, a, input, textarea, select, summary, .reactions');
+  const skip = (t) => t.closest('button, a, input, textarea, select, summary, video, audio, .reactions');
   const cancel = () => {
     clearTimeout(timer);
     timer = null;
@@ -4517,7 +4517,7 @@ function chatMessagesHtml(data, urls) {
   const byId = new Map(data.messages.map((x) => [x.id, x]));
   let html = data.more ? '<button type="button" class="btn chat-older" id="chat-older">Ver mensagens anteriores</button>' : '';
   const deletable = data.messages.some((m) => (me && m.author_id === me.member_id) || me?.is_admin);
-  if (deletable) html += `<p class="hint swipe-hint chat-swipe-hint">Arraste ${me?.is_admin ? 'uma mensagem' : 'uma mensagem sua'} para a esquerda para apagar.</p>`;
+  if (deletable) html += `<p class="hint swipe-hint chat-swipe-hint">Mantenha o dedo pressionado ${me?.is_admin ? 'numa mensagem' : 'numa mensagem sua'} para apagar (ou arraste para a esquerda).</p>`;
   if (!data.messages.length) html += '<p class="chat-empty">Nenhuma mensagem ainda. Diga olá! 👋</p>';
   let day = '';
   let prevAuthor = null;
@@ -4541,7 +4541,7 @@ function chatMessagesHtml(data, urls) {
       </div>`;
     // Quem pode apagar arrasta a mensagem para a esquerda: o fundo vermelho aparece por trás.
     html += del
-      ? `<div class="swipe msg-swipe ${mine ? 'mine' : ''}" data-id="${m.id}"><span class="swipe-bg" aria-hidden="true">${icon.trash} Apagar</span>${bubble}</div>`
+      ? `<div class="swipe msg-swipe pressable ${mine ? 'mine' : ''}" data-id="${m.id}"><span class="swipe-bg" aria-hidden="true">${icon.trash} Apagar</span>${bubble}</div>`
       : bubble;
     prevAuthor = m.author_id || '-';
   }
@@ -4576,6 +4576,22 @@ function drawChatRoom(id, data, urls = {}) {
     room = document.getElementById('chat-room');
     // A lista de mensagens é a mesma enquanto a conversa está aberta: o gesto é ligado uma vez.
     swipeLeft(document.getElementById('chat-messages'), (wrap) => chatDelete(id, wrap.dataset.id));
+    // Manter o dedo pressionado numa mensagem que a pessoa pode apagar: menu com Apagar (e Copiar texto).
+    longPress(document.getElementById('chat-messages'), '.msg-swipe', async (wrap) => {
+      const m = screenCached(`chat:${id}`)?.messages.find((x) => x.id === wrap.dataset.id);
+      if (!m) return;
+      const choice = await actionMenu(chatQuoteText(m), [
+        ...(m.body ? [['copiar', 'Copiar texto']] : []),
+        ['apagar', 'Apagar', true],
+      ]);
+      if (choice === 'apagar') chatDelete(id, m.id);
+      if (choice === 'copiar') {
+        navigator.clipboard
+          .writeText(m.body)
+          .then(() => toast('Texto copiado.'))
+          .catch(() => toast('Não deu para copiar neste aparelho.', 'error'));
+      }
+    });
     // Vídeo em tela cheia: a do app.
     const msgs = document.getElementById('chat-messages');
     msgs.addEventListener('click', (e) => {

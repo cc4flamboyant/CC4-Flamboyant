@@ -36,6 +36,8 @@ test.afterAll(async () => {
 });
 
 test('a liderança cria o grupo, escolhe quem participa e escreve com emoji, link e anexo', async ({ page }) => {
+  // Faz muita coisa (grupo, mensagens, apagar, anexo, ícone): mais tempo que o normal.
+  test.slow();
   await openLoggedIn(page, as['lider-a'].session, '/i/teste-a/#/menu');
   await page.locator('#tabbar').getByRole('link', { name: 'Chat' }).click();
   await expect(page.getByRole('heading', { name: 'Chat', level: 1 })).toBeVisible();
@@ -87,6 +89,22 @@ test('a liderança cria o grupo, escolhe quem participa e escreve com emoji, lin
   await expect
     .poll(async () => (await (await api.get(rest(`chat_messages?select=id&group_id=eq.${g0.id}&body=eq.${encodeURIComponent('Mensagem para apagar')}`), { headers: as['lider-a'].headers })).json()).length, { timeout: 15000 })
     .toBe(0);
+
+  // Manter o dedo pressionado na própria mensagem: menu com Copiar texto e Apagar (com Desfazer).
+  await expect(page.getByText('Mantenha o dedo pressionado numa mensagem para apagar (ou arraste para a esquerda).')).toBeVisible();
+  await box.fill('Apagar pressionando');
+  await page.getByRole('button', { name: 'Enviar' }).click();
+  const pressed = page.locator('.msg-swipe').filter({ hasText: 'Apagar pressionando' });
+  await expect(pressed).toBeVisible();
+  await pressed.locator('.msg-text').click({ delay: 700 });
+  const menu = page.getByRole('menu');
+  await expect(menu.getByRole('menuitem', { name: 'Copiar texto' })).toBeVisible();
+  await menu.getByRole('menuitem', { name: 'Apagar' }).click();
+  await expect(page.getByText('Mensagem apagada.')).toBeVisible();
+  await expect(pressed).toBeHidden();
+  // Toque rápido não abre o menu.
+  await page.locator('.msg.mine .msg-text').filter({ hasText: 'Bom dia, turma' }).click();
+  await expect(page.getByRole('menu')).toHaveCount(0);
 
   // Anexo (documento): aparece como arquivo para abrir.
   await page.locator('#chat-file').setInputFiles({ name: 'lista.txt', mimeType: 'text/plain', buffer: Buffer.from('Material da semana') });
