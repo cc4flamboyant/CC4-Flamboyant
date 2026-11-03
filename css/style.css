@@ -1160,6 +1160,16 @@ body:not(.has-tabbar) .chat-compose-slot { bottom: env(safe-area-inset-bottom); 
 .chat-title-text small { color: var(--muted); font-size: .8rem; }
 .chat-info-head { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
 .chat-info-head h1 { margin: 0; }
+/* Ícone do grupo: tocar na foto troca (só o administrador). */
+.icon-pick { position: relative; display: inline-flex; flex: none; border-radius: 50%; cursor: pointer; }
+.icon-pick input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.icon-pick:focus-within { outline: 2px solid var(--brand); outline-offset: 3px; }
+.icon-pick-badge {
+  position: absolute; right: -2px; bottom: -2px; display: grid; place-items: center; width: 30px; height: 30px;
+  border-radius: 50%; background: var(--brand); color: var(--brand-ink); border: 2px solid var(--surface);
+}
+.icon-pick-badge svg { width: 16px; height: 16px; }
+.icon-pick:active .avatar { transform: scale(.97); }
 
 /* Projetos das salas */
 .project-card { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius);

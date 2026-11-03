@@ -5211,17 +5211,18 @@ function drawChatInfo(id, data, urls = {}) {
     <div class="page">
       <a href="#/chat/${id}" class="back">← Conversa</a>
       <div class="chat-info-head">
-        ${avatar(g.name, g.icon_path && urls[g.icon_path], 'big')}
+        ${
+          // O administrador toca na foto para trocar o ícone (o lápis no canto mostra que dá).
+          admin
+            ? `<label class="icon-pick" title="${g.icon_path ? 'Trocar o ícone' : 'Escolher um ícone'}">
+                ${avatar(g.name, g.icon_path && urls[g.icon_path], 'big')}
+                <span class="icon-pick-badge" aria-hidden="true">${icon.pencil}</span>
+                <input type="file" id="group-icon" accept="image/*" aria-label="${g.icon_path ? 'Trocar o ícone do grupo' : 'Escolher um ícone para o grupo'}">
+              </label>`
+            : avatar(g.name, g.icon_path && urls[g.icon_path], 'big')
+        }
         <h1>${esc(g.name)}</h1>
       </div>
-      ${
-        admin
-          ? `<div class="actions-row">
-              <label class="btn">${icon.image} ${g.icon_path ? 'Trocar o ícone' : 'Escolher um ícone'}<input type="file" id="group-icon" accept="image/*" hidden></label>
-              ${g.icon_path ? '<button type="button" class="btn danger-outline" id="group-icon-off">Tirar o ícone</button>' : ''}
-            </div>`
-          : ''
-      }
       ${g.description ? `<p class="pre">${esc(g.description)}</p>` : ''}
       ${
         admin
@@ -5286,7 +5287,7 @@ function drawChatInfo(id, data, urls = {}) {
     }
     if (old) sb.storage.from('chat').remove([old]).catch(() => {});
     if (path) await galleryUrls([path], 'chat').catch(() => {});
-    after(path ? 'Ícone do grupo trocado.' : 'Ícone tirado.', (d) => (d.group.icon_path = path));
+    after('Ícone do grupo trocado.', (d) => (d.group.icon_path = path));
     const list = screenCached('chat');
     const row = list?.find((x) => x.id === id);
     if (row) {
@@ -5306,9 +5307,6 @@ function drawChatInfo(id, data, urls = {}) {
     } catch (err) {
       toast(errorText(err), 'error');
     }
-  });
-  document.getElementById('group-icon-off')?.addEventListener('click', async () => {
-    if (await ask('Tirar o ícone do grupo? Volta a aparecer com as iniciais do nome.')) setIcon(null);
   });
   document.getElementById('group-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();

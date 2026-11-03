@@ -171,9 +171,16 @@ test('a liderança cria o grupo, escolhe quem participa e escreve com emoji, lin
   // O administrador troca o ícone do grupo: aparece nos dados do grupo, na conversa e na lista.
   const shot = await page.screenshot();
   await page.locator('.chat-title').click();
-  await page.locator('#group-icon').setInputFiles({ name: 'icone.png', mimeType: 'image/png', buffer: shot });
+  // Tocar na própria foto escolhe o ícone (lápis no canto); não há botão para tirar.
+  const pick = page.locator('.chat-info-head label.icon-pick');
+  await expect(pick.locator('.icon-pick-badge')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Tirar o ícone/ })).toHaveCount(0);
+  const chooser = page.waitForEvent('filechooser');
+  await pick.click();
+  await (await chooser).setFiles({ name: 'icone.png', mimeType: 'image/png', buffer: shot });
   await expect(page.getByText('Ícone do grupo trocado.')).toBeVisible({ timeout: 15000 });
   await expect(page.locator('.chat-info-head .avatar img')).toBeVisible();
+  await expect(page.getByLabel('Trocar o ícone do grupo')).toHaveCount(1);
   await page.getByRole('link', { name: '← Conversa' }).click();
   await expect(page.locator('#chat-icon .avatar img')).toBeVisible();
   await page.locator('.chat-back').click();
@@ -249,8 +256,10 @@ test('o membro vê a mensagem nova; com o grupo bloqueado, só lê', async ({ pa
   expect(sent.ok(), await sent.text()).toBe(true);
   await expect(page.locator('.msg').filter({ hasText: 'Recado da direção' })).toBeVisible({ timeout: 15000 });
 
-  // O membro sai do grupo pelos dados do grupo.
+  // O membro sai do grupo pelos dados do grupo (e não troca o ícone).
   await page.locator('.chat-title').click();
+  await expect(page.locator('.chat-info-head .avatar')).toBeVisible();
+  await expect(page.locator('.icon-pick')).toHaveCount(0);
   await page.getByRole('button', { name: 'Sair do grupo' }).click();
   await answer(page);
   await expect(page).toHaveURL(/#\/chat$/);
