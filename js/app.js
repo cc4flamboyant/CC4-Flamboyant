@@ -3,7 +3,7 @@ import { CONFIG } from './config.js';
 import {
   esc, slugify, isValidSlug, churchSlugFromPath, churchRestUrl, inkOn, readableOnWhite, darkPalette, normalizeHex, normalizePhone, fmtPhone,
   ROLES, isLeaderRole, FEATURES, cardTokenFrom, fold, fmtDate, EMAIL_RE, parseMembersCsv, MEMBERS_CSV_TEMPLATE,
-  renderMessage, firstName, joinNames, MESSAGE_FIELDS, SPECIAL_FIELDS, yearsText, MESSAGE_EMOJIS, icsForEvent, googleCalendarUrl, REMIND_OPTIONS,
+  renderMessage, firstName, joinNames, REACTIONS, MESSAGE_FIELDS, SPECIAL_FIELDS, yearsText, MESSAGE_EMOJIS, icsForEvent, googleCalendarUrl, REMIND_OPTIONS,
 } from './util.js';
 import { resizeImage, resizeLogo, makeIconSet, resizeForGallery } from './images.js';
 import { maybeSuggestInstall, installState, installNow, iconReady, ICON_PREPARING } from './install.js';
@@ -1155,7 +1155,7 @@ async function viewMyData() {
 
       <section class="card">
         <h2>${icon.upload} Baixar meus dados</h2>
-        <p>Um arquivo com tudo o que o app guarda sobre você: os seus cadastros em cada instituição de ensino, os seus filhos e as salas deles, os dados da carteirinha, os álbuns que publicou e os pedidos para tirar fotos, as notificações, as mensagens enviadas, os aparelhos com notificação e o que você publicou.</p>
+        <p>Um arquivo com tudo o que o app guarda sobre você: os seus cadastros em cada instituição de ensino, os seus filhos e as salas deles, os dados da carteirinha, os álbuns que publicou e os pedidos para tirar fotos, as suas reações aos avisos, as notificações, as mensagens enviadas, os aparelhos com notificação e o que você publicou.</p>
         <button class="btn" id="export">Baixar arquivo</button>
         <p class="hint">Para corrigir algum dado, use "Meu cadastro" ou fale com a secretaria da instituição de ensino.</p>
       </section>
@@ -1287,7 +1287,7 @@ function helpTopics() {
         ]]
       : []),
     ...(features('avisos')
-      ? [['Avisos', '<p>A aba <a href="#/avisos">Avisos</a> traz os recados da instituição de ensino. Os mais importantes ficam fixados no topo, e alguns somem depois de uma data.</p>']]
+      ? [['Avisos', '<p>A aba <a href="#/avisos">Avisos</a> traz os recados da instituição de ensino. Os mais importantes ficam fixados no topo, e alguns somem depois de uma data.</p><p>Para reagir a um aviso, toque em <strong>😊+</strong> e escolha um emoji. Toque na sua reação para tirar, ou escolha outro emoji para trocar. Todos veem quantas pessoas reagiram, mas não quem.</p>']]
       : []),
     ...(datesOn()
       ? [[
@@ -3029,15 +3029,49 @@ async function viewEventForm(ctx, id) {
 }
 
 async function loadAnnouncements() {
-  const { data, error } = await sb
-    .from('announcements')
-    .select('id, title, body, pinned, visible_until, push, created_at')
-    .eq('church_id', state.church.id)
-    .order('pinned', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(100);
+  const [{ data, error }, counts] = await Promise.all([
+    sb
+      .from('announcements')
+      .select('id, title, body, pinned, visible_until, push, created_at')
+      .eq('church_id', state.church.id)
+      .order('pinned', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(100),
+    // Reações: se falharem, os avisos aparecem mesmo assim.
+    sb.rpc('announcement_reaction_counts', { p_church: state.church.id }).then((r) => r.data || [], () => []),
+  ]);
   if (error) throw error;
+  for (const a of data) {
+    a.reactions = {};
+    a.mine = null;
+  }
+  const byId = new Map(data.map((a) => [a.id, a]));
+  for (const r of counts) {
+    const a = byId.get(r.announcement_id);
+    if (!a) continue;
+    a.reactions[r.emoji] = r.total;
+    if (r.mine) a.mine = r.emoji;
+  }
   return data;
+}
+
+// Reações de um aviso: os emojis que já têm reação (com quantas) e o botão para reagir.
+function reactionsBar(a) {
+  const counts = a.reactions || {};
+  const used = REACTIONS.filter((e) => counts[e]);
+  return `
+    <div class="reactions" data-reactions="${esc(a.id)}">
+      ${used
+        .map(
+          (e) => `<button type="button" class="reaction ${a.mine === e ? 'mine' : ''}" data-emoji="${e}" aria-pressed="${a.mine === e}"
+            aria-label="${e} ${counts[e]} ${counts[e] === 1 ? 'pessoa' : 'pessoas'}${a.mine === e ? ', inclusive você' : ''}">${e}<span>${counts[e]}</span></button>`,
+        )
+        .join('')}
+      <button type="button" class="reaction add" data-pick aria-expanded="false" aria-label="Reagir com emoji">😊<span>+</span></button>
+      <div class="reaction-picker" hidden>
+        ${REACTIONS.map((e) => `<button type="button" data-emoji="${e}" aria-label="Reagir com ${e}" ${a.mine === e ? 'class="mine"' : ''}>${e}</button>`).join('')}
+      </div>
+    </div>`;
 }
 
 async function viewAnnouncements(ctx) {
@@ -3067,6 +3101,7 @@ function drawAnnouncements(all) {
               <h2>${esc(a.title)}</h2>
               <p class="pre">${esc(a.body)}</p>
               <p class="hint">${esc(new Date(a.created_at).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' }))}</p>
+              ${reactionsBar(a)}
               ${leader ? `<div class="actions-row"><a class="btn small" href="#/avisos/${a.id}/editar">Editar</a><button class="btn small danger-outline" data-delete="${a.id}">Excluir</button></div>` : ''}
             </article>`;
               })
@@ -3075,6 +3110,37 @@ function drawAnnouncements(all) {
       }
       ${leader ? fab('#/avisos/novo', 'Novo aviso') : ''}
     </div>`;
+  // Reagir: muda na tela na hora (e no guardado) e grava no banco; se der erro, volta como estava.
+  $view.querySelectorAll('[data-reactions]').forEach((bar) => {
+    bar.onclick = async (ev) => {
+      const btn = ev.target.closest('button');
+      if (!btn) return;
+      const picker = bar.querySelector('.reaction-picker');
+      if (btn.hasAttribute('data-pick')) {
+        picker.hidden = !picker.hidden;
+        btn.setAttribute('aria-expanded', String(!picker.hidden));
+        return;
+      }
+      const a = all.find((x) => x.id === bar.dataset.reactions);
+      const emoji = btn.dataset.emoji;
+      if (!a || !emoji) return;
+      const before = { reactions: { ...(a.reactions || {}) }, mine: a.mine };
+      const next = a.mine === emoji ? null : emoji;
+      a.reactions = { ...(a.reactions || {}) };
+      if (a.mine) a.reactions[a.mine] = Math.max(0, (a.reactions[a.mine] || 1) - 1);
+      if (next) a.reactions[next] = (a.reactions[next] || 0) + 1;
+      a.mine = next;
+      screenUpdate('avisos', all);
+      drawAnnouncements(all);
+      const { error } = await sb.rpc('set_announcement_reaction', { p_announcement: a.id, p_emoji: next });
+      if (error) {
+        Object.assign(a, before);
+        screenUpdate('avisos', all);
+        if (location.hash === '#/avisos') drawAnnouncements(all); // ainda na tela dos avisos
+        toast(errorText(error), 'error');
+      }
+    };
+  });
   $view.querySelectorAll('[data-delete]').forEach((b) => {
     b.onclick = async () => {
       if (!await ask('Excluir este aviso?')) return;

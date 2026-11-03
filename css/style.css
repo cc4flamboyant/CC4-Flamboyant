@@ -382,6 +382,18 @@ button.member-row { font: inherit; text-align: left; width: 100%; cursor: pointe
 .card .event-card { padding: 10px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; }
 .announcement h2 { margin: 4px 0 8px; }
 .announcement.expired { opacity: .65; }
+/* Reações nos avisos */
+.reactions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 8px; position: relative; }
+.reaction { display: inline-flex; align-items: center; gap: 4px; min-height: 34px; padding: 3px 10px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--surface); color: inherit; font: inherit; font-size: 1.05rem; cursor: pointer; }
+.reaction span { font-size: .85rem; font-weight: 600; }
+.reaction.mine { background: var(--brand-soft); border-color: var(--brand); }
+.reaction.add { color: var(--muted); }
+.reaction-picker { display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--surface);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .15); }
+.reaction-picker[hidden] { display: none; }
+.reaction-picker button { border: 0; background: none; font-size: 1.5rem; padding: 4px 6px; border-radius: 999px; cursor: pointer; line-height: 1; }
+.reaction-picker button.mine { background: var(--brand-soft); }
 .tags-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .notice-mini { padding: 8px 0; border-bottom: 1px solid var(--line); }
 .notice-mini p { margin: 4px 0 0; color: var(--muted); }

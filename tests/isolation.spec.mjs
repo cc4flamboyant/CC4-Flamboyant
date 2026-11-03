@@ -837,3 +837,62 @@ test.describe('Salas das crianças (012)', () => {
     expect(mine.filhos.find((f) => f.nome === `${tag} Filho`).sala).toBe(`${tag} Kids`);
   });
 });
+
+test.describe('Reações nos avisos (019)', () => {
+  const tag = `reação-${Date.now()}`;
+  test('o membro reage aos avisos que vê; quem é de fora não reage, e ninguém vê quem reagiu', async () => {
+    const mk = async (extra) => {
+      const res = await api.post(rest('announcements'), {
+        headers: returning(as['lider-a'].headers),
+        data: { church_id: church.a, title: `Aviso ${tag} reação`, body: 'Texto', ...extra },
+      });
+      expect(res.ok(), await res.text()).toBe(true);
+      return (await res.json())[0];
+    };
+    const react = (who, id, emoji) => rpc(who, 'set_announcement_reaction', { p_announcement: id, p_emoji: emoji });
+    const counts = async (who, id) => {
+      const res = await rpc(who, 'announcement_reaction_counts', { p_church: church.a });
+      expect(res.ok(), await res.text()).toBe(true);
+      return (await res.json()).filter((r) => r.announcement_id === id).sort((x, y) => x.emoji.localeCompare(y.emoji));
+    };
+    const a = await mk({});
+    const old = await mk({ visible_until: '2020-01-01' });
+    try {
+      expect((await react('membro-a', a.id, '🎉')).ok()).toBe(true);
+      expect((await react('lider-a', a.id, '🎉')).ok()).toBe(true);
+      expect(await counts('membro-a', a.id)).toEqual([{ announcement_id: a.id, emoji: '🎉', total: 2, mine: true }]);
+      // Trocar de emoji: continua uma reação por pessoa.
+      expect((await react('membro-a', a.id, '👍')).ok()).toBe(true);
+      expect(await counts('lider-a', a.id)).toEqual([
+        { announcement_id: a.id, emoji: '🎉', total: 1, mine: true },
+        { announcement_id: a.id, emoji: '👍', total: 1, mine: false },
+      ].sort((x, y) => x.emoji.localeCompare(y.emoji)));
+      // Só os emojis da lista.
+      expect((await react('membro-a', a.id, '💩')).ok()).toBe(false);
+      // Outra instituição e quem não está em nenhuma: não reagem nem veem as contagens.
+      for (const who of ['adm-b', 'sem-igreja']) {
+        expect((await react(who, a.id, '👍')).ok(), who).toBe(false);
+        expect(await counts(who, a.id), who).toEqual([]);
+      }
+      // Visitante sem conta: nada.
+      const anon = await api.post(rest('rpc/set_announcement_reaction'), { headers: { apikey: ANON_KEY, 'Content-Type': 'application/json' }, data: { p_announcement: a.id, p_emoji: '👍' } });
+      expect(anon.ok()).toBe(false);
+      // Aviso vencido: o membro não vê, então não reage; a liderança reage.
+      expect((await react('membro-a', old.id, '👍')).ok()).toBe(false);
+      expect((await react('lider-a', old.id, '👍')).ok()).toBe(true);
+      // A tabela é fechada: quem reagiu não aparece para ninguém.
+      for (const who of ['membro-a', 'adm-a']) {
+        const res = await api.get(rest('announcement_reactions?select=*'), { headers: as[who].headers });
+        expect(res.ok() ? await res.json() : [], who).toEqual([]);
+      }
+      // "Baixar meus dados" traz a reação da pessoa.
+      const mine = await (await rpc('membro-a', 'export_my_data')).json();
+      expect(mine.reacoes_aos_avisos).toEqual(expect.arrayContaining([expect.objectContaining({ aviso: `Aviso ${tag} reação`, reacao: '👍' })]));
+      // Tirar a reação.
+      expect((await react('membro-a', a.id, null)).ok()).toBe(true);
+      expect(await counts('membro-a', a.id)).toEqual([{ announcement_id: a.id, emoji: '🎉', total: 1, mine: false }]);
+    } finally {
+      for (const x of [a, old]) await api.delete(rest(`announcements?id=eq.${x.id}`), { headers: as['lider-a'].headers });
+    }
+  });
+});

@@ -274,6 +274,9 @@ export const SPECIAL_FIELDS = ['nome', 'primeiro_nome', 'instituicao', 'anos'];
 // "1 ano", "10 anos" (igual a public.years_text no banco).
 export const yearsText = (n) => (n == null || n === '' ? '' : Number(n) === 1 ? '1 ano' : `${n} anos`);
 
+// Reações nos avisos (as mesmas do banco: supabase/019_reacoes_nos_avisos.sql).
+export const REACTIONS = ['👍', '❤️', '🎉', '😂', '😮', '😢'];
+
 // Atalhos na tela da mensagem; o teclado do celular também põe qualquer outro emoji.
 export const MESSAGE_EMOJIS = ['🎂', '🎉', '🎈', '🎁', '🥳', '🎓', '🙌', '❤️', '😊', '✨', '🌟', '🌷', '📚', '✏️', '🏫', '🎶'];
 

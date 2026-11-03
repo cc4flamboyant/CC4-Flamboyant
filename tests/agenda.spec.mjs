@@ -81,6 +81,31 @@ test('a líder publica um aviso fixado e o membro vê no mural e no início', as
   await member.context().close();
 });
 
+test('o membro reage ao aviso com emoji, troca e tira, e a reação fica gravada', async ({ page }) => {
+  await openLoggedIn(page, as['membro-a'].session, '/i/teste-a/#/avisos');
+  const card = page.locator('.announcement', { hasText: `Aviso ${tag}` });
+  await card.getByRole('button', { name: 'Reagir com emoji' }).click();
+  const saved = () => page.waitForResponse((res) => res.url().includes('rpc/set_announcement_reaction') && res.ok());
+  await Promise.all([saved(), card.getByRole('button', { name: 'Reagir com 🎉' }).click()]);
+  await expect(card.locator('.reaction.mine')).toHaveText('🎉1');
+  await expect(card.locator('.reaction-picker')).toBeHidden();
+  // Gravou no banco: abre de novo e espera a resposta do banco.
+  await page.reload();
+  await page.waitForLoadState('networkidle');
+  await expect(card.locator('.reaction.mine')).toHaveText('🎉1');
+  // Trocar de emoji.
+  await card.getByRole('button', { name: 'Reagir com emoji' }).click();
+  await Promise.all([saved(), card.getByRole('button', { name: 'Reagir com 👍' }).click()]);
+  await expect(card.locator('.reaction.mine')).toHaveText('👍1');
+  await expect(card.locator('.reaction', { hasText: '🎉' })).toHaveCount(0);
+  // Tocar na própria reação tira.
+  await Promise.all([saved(), card.locator('.reaction.mine').click()]);
+  await expect(card.locator('.reaction.mine')).toHaveCount(0);
+  await page.reload();
+  await page.waitForLoadState('networkidle');
+  await expect(card.locator('.reaction.mine')).toHaveCount(0);
+});
+
 test('o membro abre a central de notificações pelo sininho', async ({ page }) => {
   await openLoggedIn(page, as['membro-a'].session, '/i/teste-a/#/');
   await page.getByRole('link', { name: 'Notificações' }).first().click();
