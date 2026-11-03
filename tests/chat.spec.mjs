@@ -108,4 +108,12 @@ test('o chat abre na hora, sem esperar o banco', async ({ page }) => {
   });
   await page.getByRole('link', { name: 'Chat' }).first().click();
   await expect(page.locator(`.chat-row`).filter({ hasText: name })).toBeVisible({ timeout: 1000 });
+  // A conversa também (buscada em segundo plano), com as mensagens.
+  await page.locator('.chat-row').filter({ hasText: name }).click();
+  await expect(page.locator('#chat-name')).toHaveText(name, { timeout: 1000 });
+  await expect(page.locator('.msg').filter({ hasText: 'Recado da direção' })).toBeVisible({ timeout: 1000 });
+  // E o Novo grupo, com a lista de pessoas.
+  await page.locator('.chat-back').click();
+  await page.getByRole('link', { name: 'Novo grupo' }).click();
+  await expect(page.locator('.pick-list li').first()).toBeVisible({ timeout: 1000 });
 });

@@ -217,7 +217,9 @@ function prefetchScreens() {
     }
     if (featureOn('avisos')) screenFetch('avisos', loadAnnouncements).catch(() => {});
     if (featureOn('salas')) screenFetch('filhos', loadMyKids).catch(() => {});
-    if (featureOn('chat')) screenFetch('chat', loadChatGroups).catch(() => {});
+    // E as conversas mais recentes, para abrirem na hora ao tocar.
+    if (featureOn('chat')) screenFetch('chat', loadChatGroups).then(prefetchChatRooms).catch(() => {});
+    if (canCreateGroups()) screenFetch('chat:candidatos', () => loadChatCandidates(null)).catch(() => {});
     if (featureOn('galeria')) {
       // E as capas dos álbuns, para a Galeria abrir com as imagens.
       screenFetch('galeria', loadAlbums)
@@ -4061,7 +4063,27 @@ async function loadChatGroups() {
 
 async function viewChat(ctx) {
   if (!requireMemberFeature('/chat', 'chat')) return;
+  // O "+" abre o Novo grupo na hora: a lista de pessoas já vem buscada (sem esperar a lista de grupos).
+  if (canCreateGroups()) screenFetch('chat:candidatos', () => loadChatCandidates(null)).catch(() => {});
+  prefetchChatRooms(screenCached('chat'));
   await screenShow(ctx, 'chat', loadChatGroups, drawChatGroups);
+  if (ctx.alive()) prefetchChatRooms(screenCached('chat'));
+}
+
+// Busca em segundo plano as conversas mais recentes (uma de cada vez, para poupar o banco)
+// e os links dos anexos delas: ao tocar no grupo, a conversa já aparece com as fotos.
+const CHAT_PREFETCH = 8;
+let chatPrefetching = null;
+function prefetchChatRooms(groups) {
+  if (!groups?.length || chatPrefetching) return;
+  const ids = groups.slice(0, CHAT_PREFETCH).map((g) => g.id).filter((id) => !screenCached(`chat:${id}`));
+  if (!ids.length) return;
+  chatPrefetching = (async () => {
+    for (const id of ids) {
+      const data = await screenFetch(`chat:${id}`, () => loadChatRoom(id)).catch(() => null);
+      if (data) await galleryUrls(chatFiles(data), 'chat').catch(() => {});
+    }
+  })().finally(() => (chatPrefetching = null));
 }
 
 function chatPreview(g) {
@@ -4474,6 +4496,9 @@ document.addEventListener('visibilitychange', () => {
 async function viewChatInfo(ctx, id) {
   if (!requireMemberFeature(`/chat/${id}/info`, 'chat')) return;
   await screenShow(ctx, `chat:${id}`, () => loadChatRoom(id), (data) => drawChatInfo(id, data));
+  // "Adicionar pessoas" abre na hora para o administrador do grupo.
+  if (ctx.alive() && chatMe(screenCached(`chat:${id}`) || { people: [] })?.is_admin)
+    screenFetch(`chat:candidatos:${id}`, () => loadChatCandidates(id)).catch(() => {});
 }
 
 function drawChatInfo(id, data) {
@@ -4530,11 +4555,18 @@ function drawChatInfo(id, data) {
       ${admin ? '<button class="btn danger-outline" id="delete-group">Apagar o grupo</button>' : ''}
     </div>`;
 
-  const after = (msg) => {
-    screenForget(`chat:${id}`);
-    screenForget('chat');
+  // A mudança deu certo: atualiza o guardado (conversa e lista) e redesenha, sem esperar o banco.
+  const after = (msg, change) => {
+    change(data);
+    screenUpdate(`chat:${id}`, data);
+    const list = screenCached('chat');
+    const row = list?.find((x) => x.id === id);
+    if (row) {
+      Object.assign(row, { name: data.group.name, description: data.group.description, locked: data.group.locked, members: data.people.length });
+      screenUpdate('chat', list);
+    }
     toast(msg);
-    render();
+    drawChatInfo(id, data);
   };
   document.getElementById('group-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -4544,14 +4576,18 @@ function drawChatInfo(id, data) {
       .update({ name: f.name.value.trim(), description: f.description.value.trim() || null, locked: f.locked.checked })
       .eq('id', id);
     if (error) return toast(errorText(error), 'error');
-    after('Grupo salvo.');
+    after('Grupo salvo.', (d) => Object.assign(d.group, { name: f.name.value.trim(), description: f.description.value.trim() || null, locked: f.locked.checked }));
   });
   $view.querySelectorAll('[data-admin]').forEach(
     (b) =>
       (b.onclick = async () => {
         const { error } = await sb.rpc('chat_set_admin', { p_group: id, p_member: b.dataset.admin, p_on: b.dataset.on === 'true' });
         if (error) return toast(errorText(error), 'error');
-        after(b.dataset.on === 'true' ? 'Agora é administrador do grupo.' : 'Deixou de ser administrador do grupo.');
+        const on = b.dataset.on === 'true';
+        after(on ? 'Agora é administrador do grupo.' : 'Deixou de ser administrador do grupo.', (d) => {
+          const p = d.people.find((x) => x.member_id === b.dataset.admin);
+          if (p) p.is_admin = on;
+        });
       }),
   );
   $view.querySelectorAll('[data-remove]').forEach(
@@ -4560,7 +4596,8 @@ function drawChatInfo(id, data) {
         if (!(await ask(`Tirar ${b.dataset.name} do grupo?`))) return;
         const { error } = await sb.rpc('chat_remove_member', { p_group: id, p_member: b.dataset.remove });
         if (error) return toast(errorText(error), 'error');
-        after('Pessoa tirada do grupo.');
+        screenForget(`chat:candidatos:${id}`); // quem saiu volta a poder ser adicionado
+        after('Pessoa tirada do grupo.', (d) => (d.people = d.people.filter((x) => x.member_id !== b.dataset.remove)));
       }),
   );
   document.getElementById('leave-group')?.addEventListener('click', async () => {
@@ -4680,6 +4717,18 @@ function drawChatForm(people) {
     });
     btn.disabled = false;
     if (error) return toast(errorText(error), 'error');
+    const me = myMember();
+    const chosen = new Set(picked(form));
+    screenUpdate(`chat:${data}`, {
+      group: { id: data, name: form.name.value.trim(), description: form.description.value.trim() || null, locked: form.locked.checked },
+      people: [
+        { member_id: me.id, name: me.name, photo_path: null, is_admin: true, is_me: true, inst_admin: me.role === 'admin' },
+        ...people.filter((p) => chosen.has(p.member_id) && p.member_id !== me.id)
+          .map((p) => ({ member_id: p.member_id, name: p.name, photo_path: null, is_admin: p.role === 'admin', is_me: false, inst_admin: p.role === 'admin' })),
+      ],
+      messages: [],
+      more: false,
+    });
     screenForget('chat');
     toast('Grupo criado.');
     navigate(`/chat/${data}`);
@@ -4712,8 +4761,15 @@ function drawChatAdd(id, people) {
     const { data, error } = await sb.rpc('chat_add_members', { p_group: id, p_members: ids });
     btn.disabled = false;
     if (error) return toast(errorText(error), 'error');
-    screenForget(`chat:${id}`);
-    screenForget(`chat:candidatos:${id}`);
+    const room = screenCached(`chat:${id}`);
+    if (room) {
+      const chosen = new Set(ids);
+      const known = new Set(room.people.map((p) => p.member_id));
+      room.people = [...room.people, ...people.filter((p) => chosen.has(p.member_id) && !known.has(p.member_id))
+        .map((p) => ({ member_id: p.member_id, name: p.name, photo_path: null, is_admin: p.role === 'admin', is_me: false, inst_admin: p.role === 'admin' }))];
+      screenUpdate(`chat:${id}`, room);
+    }
+    screenUpdate(`chat:candidatos:${id}`, people.filter((p) => !ids.includes(p.member_id)));
     screenForget('chat');
     toast(`${data} ${data === 1 ? 'pessoa adicionada' : 'pessoas adicionadas'}.`);
     navigate(`/chat/${id}/info`);
