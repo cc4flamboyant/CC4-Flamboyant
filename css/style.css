@@ -981,7 +981,9 @@ body.totem-full #tabbar, body.totem-full .topbar { visibility: hidden; }
 .chat-unread { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; display: grid; place-items: center;
   background: var(--brand); color: var(--brand-ink); font-size: .75rem; font-weight: 700; }
 
-.chat-room { display: flex; flex-direction: column; min-height: calc(100dvh - 180px); }
+/* O campo de escrever fica preso logo acima do menu de baixo; a conversa reserva o espaço dele
+   embaixo (--compose-h, medido pelo js/app.js) para a última mensagem não ficar escondida. */
+.chat-room { display: flex; flex-direction: column; padding-bottom: var(--compose-h, 72px); }
 .chat-head { display: flex; align-items: center; gap: 8px; margin: -16px -16px 8px; padding: 8px 12px;
   background: var(--surface); border-bottom: 1px solid var(--line); }
 .chat-back { font-size: 1.4rem; text-decoration: none; padding: 4px 8px; color: var(--link); }
@@ -1011,8 +1013,8 @@ body.totem-full #tabbar, body.totem-full .topbar { visibility: hidden; }
 .msg-doc span { display: flex; flex-direction: column; min-width: 0; }
 .msg-doc small { color: var(--muted); }
 
-.chat-compose-slot { position: sticky; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); z-index: 4; margin: 0 -16px; padding: 8px 12px;
-  background: var(--bg); border-top: 1px solid var(--line); }
+.chat-compose-slot { position: fixed; left: 0; right: 0; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); z-index: 9;
+  padding: 8px max(12px, calc((100% - 640px) / 2 + 12px)); background: var(--bg); border-top: 1px solid var(--line); }
 body:not(.has-tabbar) .chat-compose-slot { bottom: env(safe-area-inset-bottom); }
 .chat-compose .hint:empty { display: none; }
 .chat-compose .hint { margin: 0 0 6px; }

@@ -4221,6 +4221,9 @@ function drawChatRoom(id, data, urls = {}) {
         <div class="chat-compose-slot" id="chat-compose"></div>
       </div>`;
     room = document.getElementById('chat-room');
+    // Reserva embaixo a altura do campo de escrever (que cresce com o texto e os emojis).
+    const slot = document.getElementById('chat-compose');
+    new ResizeObserver(() => room.style.setProperty('--compose-h', `${slot.offsetHeight + 8}px`)).observe(slot);
   }
   document.getElementById('chat-name').textContent = data.group.name;
   document.getElementById('chat-sub').textContent = `${data.group.locked ? '🔒 Só administradores enviam · ' : ''}${data.people.length} ${data.people.length === 1 ? 'participante' : 'participantes'}`;
