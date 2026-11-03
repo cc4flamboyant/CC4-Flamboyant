@@ -57,6 +57,10 @@ test('a liderança cria o grupo, escolhe quem participa e escreve com emoji, lin
   await box.fill('Bom dia, turma ');
   await page.getByRole('button', { name: 'Emojis' }).click();
   await page.locator('#chat-emojis [data-emoji="🎓"]').click();
+  // Escolher um emoji deixa os emojis abertos; tocar em qualquer outro lugar fecha.
+  await expect(page.locator('#chat-emojis')).toBeVisible();
+  await page.mouse.click(200, 400); // na área das mensagens
+  await expect(page.locator('#chat-emojis')).toBeHidden();
   await box.press('End');
   await box.pressSequentially(' veja www.exemplo.com.br');
   await page.getByRole('button', { name: 'Enviar' }).click();

@@ -164,6 +164,11 @@ test('a liderança edita e exclui o aviso mantendo o dedo pressionado; o membro 
 test('o membro reage ao aviso com emoji, troca e tira, e a reação fica gravada', async ({ page }) => {
   await openLoggedIn(page, as['membro-a'].session, '/i/teste-a/#/avisos');
   const card = page.locator('.announcement', { hasText: `Aviso ${tag}` });
+  // Os emojis abertos fecham ao tocar em qualquer outro lugar.
+  await card.getByRole('button', { name: 'Reagir com emoji' }).click();
+  await expect(card.locator('.reaction-picker')).toBeVisible();
+  await page.getByRole('heading', { name: 'Avisos', level: 1 }).click();
+  await expect(card.locator('.reaction-picker')).toBeHidden();
   await card.getByRole('button', { name: 'Reagir com emoji' }).click();
   const saved = () => page.waitForResponse((res) => res.url().includes('rpc/set_announcement_reaction') && res.ok());
   await Promise.all([saved(), card.getByRole('button', { name: 'Reagir com 🎉' }).click()]);
@@ -204,7 +209,8 @@ test('o membro abre a central de notificações pelo sininho', async ({ page }) 
   await expect(page).toHaveURL(/\/i\/teste-a\/#\/notificacoes$/);
   // Nenhuma aba de baixo fica marcada: a central abre pelo sininho.
   await expect(page.locator('#tabbar a.active')).toHaveCount(0);
-  await page.getByRole('link', { name: 'Avisos', exact: true }).first().click();
+  // O filtro da central (não a aba Avisos de baixo).
+  await page.getByRole('navigation', { name: 'Filtrar notificações' }).getByRole('link', { name: 'Avisos', exact: true }).click();
   await expect(page).toHaveURL(/#\/notificacoes\?ver=avisos$/);
   await expect(page.locator('.chip.active')).toHaveText('Avisos');
 });

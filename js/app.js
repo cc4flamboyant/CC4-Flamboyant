@@ -616,6 +616,7 @@ const icon = {
   expand: '<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
   users: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.3a6.5 6.5 0 0 1 3.5 5.7"/></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  share: '<svg viewBox="0 0 24 24"><path d="M12 15V3M7.5 7.5 12 3l4.5 4.5"/><path d="M8 10H6a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1h-2"/></svg>',
   camera: '<svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>',
   eye: '<svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
   play: '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>',
@@ -3464,6 +3465,17 @@ function drawAnnouncements(all) {
     fill();
   });
   if (leader) announcementMenu(all, box);
+  // Seletor de emojis aberto num aviso: tocar em qualquer outro lugar fecha.
+  const closePickers = (e) => {
+    if (!box.isConnected) return document.removeEventListener('pointerdown', closePickers, true);
+    for (const picker of box.querySelectorAll('.reaction-picker:not([hidden])')) {
+      const bar = picker.closest('[data-reactions]');
+      if (picker.contains(e.target) || bar.querySelector('[data-pick]').contains(e.target)) continue;
+      picker.hidden = true;
+      bar.querySelector('[data-pick]').setAttribute('aria-expanded', 'false');
+    }
+  };
+  document.addEventListener('pointerdown', closePickers, true);
   fill();
 }
 
@@ -4941,6 +4953,14 @@ function bindChatCompose(id) {
     panel.hidden = !panel.hidden;
     emojiBtn.setAttribute('aria-expanded', String(!panel.hidden));
   };
+  // Tocar em qualquer outro lugar fecha os emojis (escolher um emoji deixa aberto, para pôr vários).
+  const closeEmojis = (e) => {
+    if (!panel.isConnected) return document.removeEventListener('pointerdown', closeEmojis, true);
+    if (panel.hidden || panel.contains(e.target) || emojiBtn.contains(e.target)) return;
+    panel.hidden = true;
+    emojiBtn.setAttribute('aria-expanded', 'false');
+  };
+  document.addEventListener('pointerdown', closeEmojis, true);
   panel.onclick = (e) => {
     const b = e.target.closest('[data-emoji]');
     if (!b) return;
@@ -5838,9 +5858,9 @@ function openFileViewer({ url, type, name, size }) {
             <p class="hint">Este tipo de arquivo abre num aplicativo do celular.</p>
           </div>`
     }
-    <div class="viewer-actions">
-      <a class="btn" href="${esc(url)}" target="_blank" rel="noopener" download="${esc(name || '')}">${icon.external} Abrir no celular</a>
-      ${share ? `<button type="button" class="btn" id="viewer-share">${icon.send} Compartilhar</button>` : ''}
+    <div class="viewer-actions${share ? '' : ' single'}">
+      <a class="viewer-btn primary" href="${esc(url)}" target="_blank" rel="noopener" download="${esc(name || '')}">${icon.external}<span>Abrir no celular</span></a>
+      ${share ? `<button type="button" class="viewer-btn" id="viewer-share">${icon.share}<span>Compartilhar</span></button>` : ''}
     </div>`;
   document.body.appendChild(el);
   document.documentElement.classList.add('viewer-open');

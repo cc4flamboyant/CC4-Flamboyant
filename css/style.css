@@ -1307,10 +1307,26 @@ body.in-chat-room.keyboard-open .tabbar { display: none; }
 .doc-card strong { overflow-wrap: anywhere; }
 .doc-card small { color: var(--muted); }
 .doc-card .hint { margin: 8px 0 0; }
+/* Barra de baixo do visualizador: vidro escuro, com Abrir (principal) e Compartilhar. */
 .viewer-actions {
-  position: absolute; left: 12px; right: 12px; bottom: calc(14px + env(safe-area-inset-bottom)); display: flex; gap: 8px; justify-content: center;
+  position: absolute; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 1;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; max-width: 520px; margin: 0 auto; padding: 8px;
+  border-radius: 20px; background: rgb(20 22 28 / .72); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 8px 24px rgb(0 0 0 / .35);
 }
-.viewer-actions .btn { flex: 1; max-width: 220px; justify-content: center; background: rgb(255 255 255 / .92); color: #1b1e27; border-color: transparent; }
+.viewer-actions.single { grid-template-columns: 1fr; }
+.viewer-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 50px; padding: 0 14px;
+  border: 1px solid rgb(255 255 255 / .22); border-radius: 14px; background: rgb(255 255 255 / .1); color: #fff;
+  font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; transition: transform .1s, background .15s;
+}
+.viewer-btn svg { width: 20px; height: 20px; flex: none; }
+.viewer-btn span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.viewer-btn.primary { background: var(--brand); color: var(--brand-ink); border-color: transparent; }
+.viewer-btn:hover { background: rgb(255 255 255 / .18); }
+.viewer-btn.primary:hover { background: color-mix(in srgb, var(--brand) 88%, #fff); }
+.viewer-btn:active { transform: scale(.97); }
+.viewer-btn:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 button.msg-doc { width: 100%; border: 0; font: inherit; text-align: left; cursor: pointer; }
 /* Adicionar arquivos ao projeto: câmera e arquivos, com o progresso do envio. */
 .upload-zone { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 4px 0 8px; padding: 10px; border: 2px dashed var(--line); border-radius: var(--radius); }
@@ -1355,3 +1371,6 @@ button.msg-doc { width: 100%; border: 0; font: inherit; text-align: left; cursor
 .chat-swipe-hint { text-align: center; }
 /* O vermelho só aparece enquanto arrasta (parado, não vaza pelos cantos do balão). */
 .msg-swipe:not(:has(.dragging)):not(.removing) .swipe-bg { visibility: hidden; }
+
+/* Visualizador aberto: o aviso fica acima da barra de botões de baixo. */
+.viewer-open .toast { bottom: calc(100px + env(safe-area-inset-bottom)) !important; z-index: 31; }
