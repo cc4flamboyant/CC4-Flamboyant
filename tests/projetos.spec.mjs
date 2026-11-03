@@ -90,3 +90,29 @@ test('o responsável da sala vê o projeto e comenta; abre na hora', async ({ pa
   await answer(page);
   await expect(page.locator('.comment')).toHaveCount(0);
 });
+
+test('a entrega do projeto aparece na Agenda (lista, mês e dia) e abre o projeto', async ({ page }) => {
+  // Daqui a 3 dias, no fuso dos testes.
+  const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+  const due = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 3);
+  const iso = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
+  const [{ id: church }] = await (await api.get(rest('churches?select=id&slug=eq.teste-a'), { headers: as['adm-a'].headers })).json();
+  const delivery = `${tag} Maquete`;
+  const res = await api.post(rest('room_projects'), {
+    headers: returning(as['lider-a'].headers),
+    data: { church_id: church, room_id: ids.room, title: delivery, due_on: iso },
+  });
+  expect(res.ok()).toBeTruthy();
+
+  await openLoggedIn(page, as['membro-a'].session, '/i/teste-a/#/agenda');
+  const card = page.locator('.event-card.delivery').filter({ hasText: delivery });
+  await expect(card).toBeVisible();
+  await expect(card).toContainText(`Entrega do projeto · ${tag}`);
+
+  await page.goto(`/i/teste-a/#/calendario/${iso.slice(0, 7)}`);
+  await expect(page.locator(`.cal-day[href="#/calendario/dia/${iso}"] .cal-ev.delivery`)).toContainText(delivery);
+
+  await page.goto(`/i/teste-a/#/calendario/dia/${iso}`);
+  await page.locator('.day-deliveries .event-card').filter({ hasText: delivery }).click();
+  await expect(page.getByRole('heading', { name: delivery })).toBeVisible();
+});

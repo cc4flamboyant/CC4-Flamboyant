@@ -2681,37 +2681,69 @@ const loadAgenda = () => fetchEvents(agendaStart(), addDays(agendaStart(), 90));
 
 async function viewAgenda(ctx) {
   if (!requireMemberFeature('/agenda', 'agenda')) return;
-  await screenShow(ctx, 'agenda', loadAgenda, (all) => {
-    drawAgenda(all);
+  // As entregas dos projetos vêm dos projetos guardados (o Início já busca); conferidos em segundo plano.
+  const projects = () => (projectsOn() ? screenCached('projetos') : null);
+  const draw = (all) => {
+    drawAgenda(all, projects());
     fillCalendarBar();
-  });
+  };
+  if (projectsOn()) {
+    const before = JSON.stringify(screenCached('projetos'));
+    screenFetch('projetos', loadProjects)
+      .then((p) => {
+        const all = screenCached('agenda');
+        if (ctx.alive() && all && JSON.stringify(p) !== before) draw(all);
+      })
+      .catch(() => {});
+  }
+  await screenShow(ctx, 'agenda', loadAgenda, draw);
 }
 
-function drawAgenda(all) {
+// Entregas dos projetos (só os que a pessoa vê) entre dois dias: aparecem na Agenda.
+const projectDeliveries = (projects, fromIso, toIso) =>
+  (projects || [])
+    .filter((p) => p.due_on && p.due_on >= fromIso && p.due_on <= toIso)
+    .map(({ id, title, room_name, due_on }) => ({ id, title, room_name, due_on }));
+
+function deliveryCard(p) {
+  return `
+    <a class="event-card delivery" href="#/projetos/${p.id}">
+      <span class="event-time">${icon.book}</span>
+      <span><strong>${esc(p.title)}</strong><small>Entrega do projeto${p.room_name ? ` · ${esc(p.room_name)}` : ''}</small></span>
+      ${icon.chevron}
+    </a>`;
+}
+
+function drawAgenda(all, projects) {
   // O guardado pode ser de outro dia: tira o que já terminou.
   const now = Date.now();
   const rows = all.filter((ev) => new Date(ev.ends_at || new Date(ev.starts_at).getTime() + 2 * 3600e3).getTime() > now);
+  const today = isoLocal(agendaStart());
+  const deliveries = projectDeliveries(projects, today, isoLocal(addDays(agendaStart(), 90)));
   const byDay = new Map();
-  for (const ev of rows) {
-    const day = isoLocal(new Date(ev.starts_at));
+  const add = (day, html) => {
     if (!byDay.has(day)) byDay.set(day, []);
-    byDay.get(day).push(ev);
-  }
+    byDay.get(day).push(html);
+  };
+  // As entregas valem o dia todo: vêm antes dos eventos do dia.
+  for (const p of deliveries) add(p.due_on, deliveryCard(p));
+  for (const ev of rows) add(isoLocal(new Date(ev.starts_at)), eventCard(ev));
+  const days = [...byDay].sort(([a], [b]) => a.localeCompare(b));
   $view.innerHTML = `
     <div class="page">
       ${agendaSwitch('lista')}
       ${calendarBarSlot()}
       <h1>Agenda</h1>
       ${
-        rows.length
-          ? [...byDay]
+        days.length
+          ? days
               .map(([day, list]) => {
                 const label = dayLabel(day);
                 const long = parseIso(day).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
                 return `
             <section class="agenda-day">
               <h2>${['Hoje', 'Amanhã'].includes(label) ? `${label}, ${long.split(',')[0]}` : long.charAt(0).toUpperCase() + long.slice(1)}</h2>
-              <div class="list">${list.map(eventCard).join('')}</div>
+              <div class="list">${list.join('')}</div>
             </section>`;
               })
               .join('')
@@ -2748,13 +2780,19 @@ function agendaSwitch(active, day = isoLocal(new Date())) {
 async function loadCalendar(fromIso, toIso) {
   const from = parseIso(fromIso);
   const to = addDays(parseIso(toIso), 1);
-  const [events, birthdays] = await Promise.all([
+  const [events, birthdays, projects] = await Promise.all([
     fetchEvents(from, to),
     datesOn() ? fetchBirthdays(fromIso, toIso).catch(() => []) : Promise.resolve([]),
+    projectsOn() ? loadProjects().catch(() => []) : Promise.resolve([]),
   ]);
-  return { events, birthdays: birthdays.filter((b) => b.kind === 'aniversario') };
+  return {
+    events,
+    birthdays: birthdays.filter((b) => b.kind === 'aniversario'),
+    deliveries: projectDeliveries(projects, fromIso, toIso),
+  };
 }
 const eventsOn = (events, iso) => events.filter((ev) => isoLocal(new Date(ev.starts_at)) === iso);
+const deliveriesOn = (deliveries, iso) => (deliveries || []).filter((p) => p.due_on === iso);
 const birthdaysOn = (birthdays, iso) => birthdays.filter((b) => b.on_date === iso);
 
 // Grade do mês: começa no domingo da primeira semana e termina no sábado da última.
@@ -2778,7 +2816,7 @@ async function viewCalendar(ctx, ym) {
   });
 }
 
-function drawCalendar(first, { events, birthdays }) {
+function drawCalendar(first, { events, birthdays, deliveries }) {
   const { days } = monthGrid(first);
   const today = isoLocal(new Date());
   const prev = ymOf(new Date(first.getFullYear(), first.getMonth() - 1, 1));
@@ -2801,16 +2839,18 @@ function drawCalendar(first, { events, birthdays }) {
             const iso = isoLocal(d);
             const evs = eventsOn(events, iso);
             const bds = birthdaysOn(birthdays, iso);
+            const dls = deliveriesOn(deliveries, iso);
+            const chips = [
+              ...dls.map((p) => `<span class="cal-ev delivery">${esc(p.title)}</span>`),
+              ...evs.map((ev) => `<span class="cal-ev">${esc(ev.title)}</span>`),
+            ];
             const out = d.getMonth() !== first.getMonth();
-            const label = `${d.getDate()} de ${d.toLocaleDateString('pt-BR', { month: 'long' })}: ${evs.length ? `${evs.length} evento${evs.length > 1 ? 's' : ''}` : 'sem eventos'}${bds.length ? `, ${bds.length} aniversário${bds.length > 1 ? 's' : ''}` : ''}`;
+            const label = `${d.getDate()} de ${d.toLocaleDateString('pt-BR', { month: 'long' })}: ${evs.length ? `${evs.length} evento${evs.length > 1 ? 's' : ''}` : 'sem eventos'}${dls.length ? `, ${dls.length} entrega${dls.length > 1 ? 's' : ''} de projeto` : ''}${bds.length ? `, ${bds.length} aniversário${bds.length > 1 ? 's' : ''}` : ''}`;
             return `
           <a class="cal-day${out ? ' out' : ''}${iso === today ? ' today' : ''}" href="#/calendario/dia/${iso}" role="gridcell" aria-label="${esc(label)}">
             <span class="cal-num">${d.getDate()}${bds.length ? ' <span aria-hidden="true">🎂</span>' : ''}</span>
-            ${evs
-              .slice(0, 2)
-              .map((ev) => `<span class="cal-ev">${esc(ev.title)}</span>`)
-              .join('')}
-            ${evs.length > 2 ? `<span class="cal-more">+${evs.length - 2}</span>` : ''}
+            ${chips.slice(0, 2).join('')}
+            ${chips.length > 2 ? `<span class="cal-more">+${chips.length - 2}</span>` : ''}
           </a>`;
           })
           .join('')}
@@ -2825,10 +2865,11 @@ async function viewCalendarDay(ctx, iso) {
   await screenShow(ctx, `caldia:${iso}`, () => loadCalendar(iso, iso), (d) => drawCalendarDay(iso, d));
 }
 
-function drawCalendarDay(iso, { events, birthdays }) {
+function drawCalendarDay(iso, { events, birthdays, deliveries }) {
   const d = parseIso(iso);
   const evs = eventsOn(events, iso).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   const bds = birthdaysOn(birthdays, iso);
+  const dls = deliveriesOn(deliveries, iso);
   const label = dayLabel(iso);
   const long = d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const title = ['Hoje', 'Amanhã'].includes(label) ? `${label}, ${long.split(',')[0]}` : long.charAt(0).toUpperCase() + long.slice(1);
@@ -2846,6 +2887,7 @@ function drawCalendarDay(iso, { events, birthdays }) {
           ? `<section class="card"><h2>${icon.cake} Aniversário</h2><p>${esc(joinNames(bds.map((b) => b.name)))}</p></section>`
           : ''
       }
+      ${dls.length ? `<div class="list day-deliveries">${dls.map(deliveryCard).join('')}</div>` : ''}
       ${
         evs.length
           ? `<div class="day-timeline">${evs
@@ -2861,6 +2903,8 @@ function drawCalendarDay(iso, { events, birthdays }) {
           </a>`;
               })
               .join('')}</div>`
+          : dls.length
+          ? ''
           : `<div class="empty"><p>Nenhum evento neste dia.</p>${isLeaderRole(myRole()) ? '<p class="hint">Toque no <strong>+</strong> para adicionar.</p>' : ''}</div>`
       }
       <p class="center"><a href="#/calendario/${iso.slice(0, 7)}">Ver o mês</a></p>

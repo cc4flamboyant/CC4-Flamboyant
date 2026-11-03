@@ -954,6 +954,11 @@ body.totem-full #tabbar, body.totem-full .topbar { visibility: hidden; }
 .cal-num { font-size: .8rem; font-weight: 700; }
 .cal-ev { display: block; font-size: .68rem; line-height: 1.2; padding: 1px 3px; border-radius: 4px; background: var(--brand-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cal-more { font-size: .68rem; color: var(--muted); }
+/* Entregas dos projetos na Agenda: em laranja, para não confundir com os eventos. */
+.cal-ev.delivery { background: color-mix(in srgb, #f08c00 18%, var(--surface)); color: color-mix(in srgb, #e67700 75%, var(--ink)); }
+.event-card.delivery .event-time { display: flex; color: color-mix(in srgb, #e67700 75%, var(--ink)); }
+.event-card.delivery .event-time svg { width: 22px; height: 22px; }
+.day-deliveries { margin-bottom: 12px; }
 .day-timeline { display: flex; flex-direction: column; gap: 8px; }
 .day-slot { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--brand); color: inherit; text-decoration: none; }
 .day-hour { display: flex; flex-direction: column; min-width: 52px; font-weight: 700; }
