@@ -81,7 +81,8 @@ test('a liderança edita o calendário: nome e ano, e troca o arquivo', async ({
   await expect(page.getByLabel('Nome')).toHaveValue(title);
   await page.getByLabel('Ano').selectOption(String(year + 1));
   await page.getByRole('button', { name: 'Salvar' }).click();
-  await expect(page.getByText('Calendário salvo.')).toBeVisible();
+  // Só volta para a lista depois de salvar (o aviso "Calendário salvo." pode ficar na tela).
+  await expect(page).toHaveURL(/#\/agenda\/calendarios$/);
   await expect(rows).toHaveCount(1);
   await expect(rows).toContainText(`${title} ${year + 1}`);
   // Volta o ano e troca o arquivo: o novo entra no lugar (continua um só).
@@ -92,7 +93,7 @@ test('a liderança edita o calendário: nome e ano, e troca o arquivo', async ({
   await page.setViewportSize({ width: 412, height: 915 });
   await page.getByLabel('Trocar o arquivo (opcional)').setInputFiles({ name: 'novo.png', mimeType: 'image/png', buffer: shot });
   await page.getByRole('button', { name: 'Salvar' }).click();
-  await expect(page.getByText('Calendário salvo.')).toBeVisible({ timeout: 20000 });
+  await expect(page).toHaveURL(/#\/agenda\/calendarios$/, { timeout: 30000 });
   await expect(rows).toHaveCount(1);
   await expect(rows).toContainText(`${title} ${year}`);
 });
