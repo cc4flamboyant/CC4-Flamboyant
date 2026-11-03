@@ -1084,6 +1084,65 @@ test.describe('Ícone do grupo do chat (021)', () => {
   });
 });
 
+test.describe('Quem reagiu e reações no chat (027)', () => {
+  const ids = {};
+  test.afterAll(async () => {
+    if (ids.group) await api.delete(rest(`chat_groups?id=eq.${ids.group}`), { headers: as['lider-a'].headers });
+    if (ids.notice) await api.delete(rest(`announcements?id=eq.${ids.notice}`), { headers: as['lider-a'].headers });
+  });
+
+  test('avisos: quem é da instituição vê quem reagiu; de fora, ninguém', async () => {
+    const res = await api.post(rest('announcements'), {
+      headers: { ...as['lider-a'].headers, Prefer: 'return=representation' },
+      data: { church_id: church.a, title: `Reações ${Date.now()}`, body: 'x' },
+    });
+    expect(res.ok(), await res.text()).toBe(true);
+    ids.notice = (await res.json())[0].id;
+    expect((await rpc('membro-a', 'set_announcement_reaction', { p_announcement: ids.notice, p_emoji: '🎉' })).ok()).toBe(true);
+    const people = async (who) => {
+      const r = await rpc(who, 'announcement_reaction_people', { p_announcement: ids.notice });
+      return r.ok() ? r.json() : [];
+    };
+    const seen = await people('lider-a');
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toEqual(expect.objectContaining({ emoji: '🎉', mine: false }));
+    expect((await people('membro-a'))[0]).toEqual(expect.objectContaining({ emoji: '🎉', mine: true }));
+    for (const who of ['adm-b', 'sem-igreja']) expect(await people(who), who).toEqual([]);
+  });
+
+  test('chat: só quem está no grupo reage e vê as reações; sair do grupo tira as reações', async () => {
+    const [{ id: membro }] = await get('adm-a', `members?select=id&church_id=eq.${church.a}&user_id=eq.${as['membro-a'].id}`);
+    const g = await rpc('lider-a', 'chat_create_group', { p_church: church.a, p_name: `Reações ${Date.now()}`, p_description: null, p_locked: false, p_members: [membro] });
+    expect(g.ok(), await g.text()).toBe(true);
+    ids.group = await g.json();
+    const [msg] = await (await rpc('lider-a', 'chat_send', { p_group: ids.group, p_body: 'Reaja aqui' })).json();
+    const react = (who, emoji) => rpc(who, 'chat_set_reaction', { p_message: msg.id, p_emoji: emoji });
+    const list = (who) => get(who, `chat_reactions?select=member_id,emoji&message_id=eq.${msg.id}`);
+    expect((await react('membro-a', '❤️')).ok()).toBe(true);
+    expect((await react('lider-a', '👍')).ok()).toBe(true);
+    // Só um por pessoa: trocar substitui.
+    expect((await react('membro-a', '😂')).ok()).toBe(true);
+    expect((await list('lider-a')).map((r) => r.emoji).sort()).toEqual(['👍', '😂']);
+    // Emoji fora da lista: recusa.
+    expect((await react('lider-a', '💩')).ok()).toBe(false);
+    // De fora do grupo / da instituição: não reage nem lê.
+    for (const who of ['adm-b', 'sem-igreja']) {
+      expect((await react(who, '👍')).ok(), who).toBe(false);
+      expect(await list(who), who).toEqual([]);
+    }
+    // Ninguém grava direto na tabela.
+    const direct = await api.post(rest('chat_reactions'), { headers: as['membro-a'].headers, data: { message_id: msg.id, group_id: ids.group, member_id: membro, emoji: '👍' } });
+    expect(direct.ok()).toBe(false);
+    // Tirar a reação.
+    expect((await react('lider-a', null)).ok()).toBe(true);
+    expect((await list('membro-a')).map((r) => r.emoji)).toEqual(['😂']);
+    // O membro sai do grupo: a reação dele some.
+    const out = await rpc('membro-a', 'chat_remove_member', { p_group: ids.group, p_member: membro });
+    expect(out.ok(), await out.text()).toBe(true);
+    expect(await list('lider-a')).toEqual([]);
+  });
+});
+
 test.describe('Chat: responder citando (026)', () => {
   const ids = {};
   test.afterAll(async () => {

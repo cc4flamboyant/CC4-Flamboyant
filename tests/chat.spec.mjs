@@ -66,12 +66,19 @@ test('a liderança cria o grupo, escolhe quem participa e escreve com emoji, lin
   await expect(box).toHaveValue('');
 
   // Arrastar a própria mensagem para a esquerda apaga, com Desfazer.
+  // A conversa se redesenha quando o banco confirma o envio: se o arrasto pegar a versão
+  // antiga da mensagem, tenta de novo até ela sumir.
   const drag = async (loc) => {
-    const b = await loc.boundingBox();
-    await page.mouse.move(b.x + b.width - 10, b.y + b.height / 2);
-    await page.mouse.down();
-    for (let i = 1; i <= 10; i++) await page.mouse.move(b.x + b.width - 10 - i * b.width * 0.08, b.y + b.height / 2);
-    await page.mouse.up();
+    await expect(async () => {
+      await expect(loc).toBeVisible({ timeout: 2000 });
+      const b = await loc.boundingBox();
+      if (!b) throw new Error('mensagem ainda sem lugar na tela');
+      await page.mouse.move(b.x + b.width - 10, b.y + b.height / 2);
+      await page.mouse.down();
+      for (let i = 1; i <= 10; i++) await page.mouse.move(b.x + b.width - 10 - i * b.width * 0.08, b.y + b.height / 2);
+      await page.mouse.up();
+      await expect(loc).toBeHidden({ timeout: 2000 });
+    }).toPass({ timeout: 15000 });
   };
   await box.fill('Mensagem para apagar');
   await page.getByRole('button', { name: 'Enviar' }).click();
@@ -91,7 +98,7 @@ test('a liderança cria o grupo, escolhe quem participa e escreve com emoji, lin
     .toBe(0);
 
   // Manter o dedo pressionado na própria mensagem: menu com Copiar texto e Apagar (com Desfazer).
-  await expect(page.getByText('Mantenha o dedo pressionado numa mensagem para apagar (ou arraste para a esquerda).')).toBeVisible();
+  await expect(page.getByText('Mantenha o dedo pressionado numa mensagem para reagir ou copiar; para apagar também (ou arraste para a esquerda).')).toBeVisible();
   await box.fill('Apagar pressionando');
   await page.getByRole('button', { name: 'Enviar' }).click();
   const pressed = page.locator('.msg-swipe').filter({ hasText: 'Apagar pressionando' });
@@ -105,6 +112,25 @@ test('a liderança cria o grupo, escolhe quem participa e escreve com emoji, lin
   // Toque rápido não abre o menu.
   await page.locator('.msg.mine .msg-text').filter({ hasText: 'Bom dia, turma' }).click();
   await expect(page.getByRole('menu')).toHaveCount(0);
+
+  // Reagir pelo menu (linha de emojis no alto); tocar na reação mostra quem reagiu e dali tira.
+  const hello = page.locator('.msg').filter({ hasText: 'Bom dia, turma' });
+  await hello.locator('.msg-text').click({ delay: 700, position: { x: 4, y: 6 } }); // no começo (o meio tem um link)
+  await Promise.all([
+    page.waitForResponse((r) => r.url().includes('rpc/chat_set_reaction') && r.ok()),
+    page.getByRole('button', { name: 'Reagir com 🎉' }).click(),
+  ]);
+  const chip = hello.locator('.msg-reactions .reaction.mine');
+  await expect(chip).toHaveText('🎉1');
+  // Ficou gravado: recarregando, continua.
+  await page.reload();
+  await expect(chip).toHaveText('🎉1');
+  await chip.click();
+  const who = page.getByRole('dialog');
+  await expect(who.getByRole('heading', { name: 'Reações · 1 pessoa' })).toBeVisible();
+  await expect(who.locator('.who-list li')).toContainText('Você');
+  await who.getByRole('button', { name: 'Tirar minha reação 🎉' }).click();
+  await expect(hello.locator('.msg-reactions')).toHaveCount(0);
 
   // Anexo (documento): aparece como arquivo para abrir.
   await page.locator('#chat-file').setInputFiles({ name: 'lista.txt', mimeType: 'text/plain', buffer: Buffer.from('Material da semana') });
@@ -198,6 +224,26 @@ test('o membro vê a mensagem nova; com o grupo bloqueado, só lê', async ({ pa
   await answer(page);
   await expect(page).toHaveURL(/#\/chat$/);
   await expect(page.locator(`a.chat-row[href="#/chat/${g.id}"]`)).toHaveCount(0);
+});
+
+test('as fotos do chat ficam guardadas no aparelho (aparecem na hora da próxima vez)', async ({ browser }) => {
+  const g = await group();
+  // Este teste liga o service worker (os outros rodam sem ele).
+  const ctx = await browser.newContext({ ...test.info().project.use, baseURL: 'http://localhost:4173/', serviceWorkers: 'allow' });
+  const page = await ctx.newPage();
+  await openLoggedIn(page, as['lider-a'].session, `/i/teste-a/#/chat/${g.id}`);
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) await page.reload();
+  await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
+  // O ícone do grupo (foto da pasta privada do chat) aparece e fica guardado pelo caminho do arquivo.
+  const img = page.locator('#chat-icon .avatar img');
+  await expect(img).toBeVisible({ timeout: 15000 });
+  const saved = () =>
+    page.evaluate(async () => (await (await caches.open('cc4-fotos')).keys()).map((r) => r.url));
+  await expect.poll(saved, { timeout: 15000 }).toEqual(expect.arrayContaining([expect.stringMatching(/\/storage\/v1\/object\/sign\/chat\/.+\.webp$/)]));
+  // Sem o token: o mesmo arquivo com um link novo vem do aparelho.
+  expect((await saved()).every((u) => !u.includes('token='))).toBe(true);
+  await ctx.close();
 });
 
 test('o chat abre na hora, sem esperar o banco', async ({ page }) => {

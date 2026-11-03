@@ -387,12 +387,14 @@ function longPress(container, selector, onPress) {
 }
 
 // Menu de ações (abre de baixo no celular): items = [[valor, texto, vermelho?]]. Devolve o valor ou null.
-function actionMenu(title, items) {
+// Com emojis: uma linha de reações no alto (devolve "emoji:👍"); current é a reação atual da pessoa.
+function actionMenu(title, items, { emojis = null, current = null } = {}) {
   const dlg = document.createElement('dialog');
   dlg.className = 'ask action-menu';
   dlg.innerHTML = `
     <form method="dialog">
       <h2></h2>
+      ${emojis ? `<div class="action-emojis" role="group" aria-label="Reagir">${emojis.map((e) => `<button class="${e === current ? 'mine' : ''}" value="emoji:${e}" aria-label="Reagir com ${e}${e === current ? ' (tirar)' : ''}" aria-pressed="${e === current}">${e}</button>`).join('')}</div>` : ''}
       <div class="action-list" role="menu">
         ${items.map(([v, text, red]) => `<button class="btn${red ? ' danger-outline' : ''}" role="menuitem" value="${esc(v)}">${esc(text)}</button>`).join('')}
         <button class="btn ghost" value="cancel">Cancelar</button>
@@ -410,6 +412,42 @@ function actionMenu(title, items) {
     dlg.addEventListener('click', (e) => e.target === dlg && dlg.close('cancel'));
     dlg.showModal();
     dlg.querySelector('[role="menuitem"]')?.focus();
+  });
+}
+
+// Quem reagiu: people = [{emoji, name, mine}], com o emoji tocado (focus) primeiro.
+// Devolve "react" (reagir com o focus), "remove" (tirar a própria reação) ou null.
+function reactionPeople(people, focus) {
+  const list = [...people].sort((a, b) => (b.emoji === focus) - (a.emoji === focus) || b.mine - a.mine);
+  const mine = people.find((x) => x.mine)?.emoji || null;
+  const dlg = document.createElement('dialog');
+  dlg.className = 'ask action-menu reaction-people';
+  dlg.innerHTML = `
+    <form method="dialog">
+      <h2>Reações · ${list.length} ${list.length === 1 ? 'pessoa' : 'pessoas'}</h2>
+      ${
+        list.length
+          ? `<ul class="who-list">${list
+              .map((x) => `<li><span class="who-emoji" aria-hidden="true">${x.emoji}</span><span class="who-name">${esc(x.name)}</span>${x.mine ? '<small>Você</small>' : ''}</li>`)
+              .join('')}</ul>`
+          : '<p>Ninguém reagiu ainda.</p>'
+      }
+      <div class="action-list">
+        ${mine ? `<button class="btn danger-outline" value="remove">Tirar minha reação ${mine}</button>` : ''}
+        ${focus && mine !== focus ? `<button class="btn" value="react">Reagir com ${focus}</button>` : ''}
+        <button class="btn" value="cancel">Fechar</button>
+      </div>
+    </form>`;
+  document.body.append(dlg);
+  return new Promise((resolve) => {
+    dlg.addEventListener('close', () => {
+      const v = dlg.returnValue;
+      dlg.remove();
+      resolve(v === 'react' || v === 'remove' ? v : null);
+    });
+    dlg.addEventListener('click', (e) => e.target === dlg && dlg.close('cancel'));
+    dlg.showModal();
+    dlg.querySelector('[value="cancel"]').focus();
   });
 }
 
@@ -752,6 +790,7 @@ const churchRoutes = [
   [/^\/calendario\/(\d{4}-\d{2})$/, viewCalendar],
   [/^\/calendario\/dia\/(\d{4}-\d{2}-\d{2})$/, viewCalendarDay],
   [/^\/agenda\/calendarios$/, viewYearCalendars],
+  [/^\/agenda\/calendarios\/([0-9a-f-]{36})\/editar$/, viewYearCalendarForm],
   [/^\/agenda\/calendario\/([0-9a-f-]{36})$/, viewYearCalendar],
   [/^\/agenda\/novo$/, viewEventForm],
   [/^\/agenda\/([0-9a-f-]{36})$/, viewEvent],
@@ -875,6 +914,8 @@ async function viewLogin(ctx) {
 
 async function signOut() {
   clearBootCache();
+  // As fotos guardadas no aparelho (chat, galeria…) saem junto com a conta.
+  await globalThis.caches?.delete('cc4-fotos').catch(() => {});
   await sb.auth.signOut({ scope: 'local' });
   await setUser(null);
   navigate('/');
@@ -3257,7 +3298,7 @@ function reactionsBar(a) {
       ${used
         .map(
           (e) => `<button type="button" class="reaction ${a.mine === e ? 'mine' : ''}" data-emoji="${e}" aria-pressed="${a.mine === e}"
-            aria-label="${e} ${counts[e]} ${counts[e] === 1 ? 'pessoa' : 'pessoas'}${a.mine === e ? ', inclusive você' : ''}">${e}<span>${counts[e]}</span></button>`,
+            aria-label="${e} ${counts[e]} ${counts[e] === 1 ? 'pessoa' : 'pessoas'}${a.mine === e ? ', inclusive você' : ''}. Ver quem reagiu">${e}<span>${counts[e]}</span></button>`,
         )
         .join('')}
       <button type="button" class="reaction add" data-pick aria-expanded="false" aria-label="Reagir com emoji">😊<span>+</span></button>
@@ -3348,8 +3389,16 @@ function wireAnnouncements(all, box, fill) {
       const a = all.find((x) => x.id === bar.dataset.reactions);
       const emoji = btn.dataset.emoji;
       if (!a || !emoji) return;
+      let next = a.mine === emoji ? null : emoji;
+      // Emoji que já está no aviso: mostra quem reagiu (e dali dá para reagir ou tirar a sua).
+      if (!btn.closest('.reaction-picker')) {
+        const { data: people, error } = await sb.rpc('announcement_reaction_people', { p_announcement: a.id });
+        if (error) return toast(errorText(error), 'error');
+        const choice = await reactionPeople(people, emoji);
+        if (!choice || !box.isConnected) return;
+        next = choice === 'remove' ? null : emoji;
+      }
       const before = { reactions: { ...(a.reactions || {}) }, mine: a.mine };
-      const next = a.mine === emoji ? null : emoji;
       a.reactions = { ...(a.reactions || {}) };
       if (a.mine) a.reactions[a.mine] = Math.max(0, (a.reactions[a.mine] || 1) - 1);
       if (next) a.reactions[next] = (a.reactions[next] || 0) + 1;
@@ -4296,7 +4345,13 @@ function prefetchChatRooms(groups) {
   chatPrefetching = (async () => {
     for (const id of ids) {
       const data = await screenFetch(`chat:${id}`, () => loadChatRoom(id)).catch(() => null);
-      if (data) await galleryUrls(chatFiles(data), 'chat').catch(() => {});
+      if (!data) continue;
+      // E já baixa as fotos (ficam guardadas no aparelho): a conversa abre com elas.
+      const urls = await galleryUrls(chatFiles(data), 'chat').catch(() => ({}));
+      for (const m of data.messages) {
+        if (m.file_ready && /^image\//.test(m.file_type || '') && urls[m.file_path]) new Image().src = urls[m.file_path];
+      }
+      if (data.group?.icon_path && urls[data.group.icon_path]) new Image().src = urls[data.group.icon_path];
     }
   })().finally(() => (chatPrefetching = null));
 }
@@ -4337,15 +4392,17 @@ function drawChatGroups(groups, urls = {}) {
 
 // Conversa: o grupo, os participantes e as últimas mensagens (as mais antigas por último na busca).
 async function loadChatRoom(id) {
-  const [g, people, msgs] = await Promise.all([
+  const [g, people, msgs, reacts] = await Promise.all([
     sb.from('chat_groups').select('id, name, description, locked, icon_path').eq('id', id).maybeSingle(),
     sb.rpc('chat_group_members', { p_group: id }),
     chatMessagesQuery(id),
+    // Reações das mensagens do grupo (027): quem reagiu e com qual emoji.
+    sb.from('chat_reactions').select('message_id, member_id, emoji').eq('group_id', id).order('created_at').limit(3000),
   ]);
-  for (const r of [g, people, msgs]) if (r.error) throw r.error;
+  for (const r of [g, people, msgs, reacts]) if (r.error) throw r.error;
   // As que a pessoa acabou de apagar (esperando o Desfazer) não voltam.
   const messages = msgs.data.reverse().filter((m) => !chatPendingDeletes.has(m.id));
-  return { group: g.data, people: people.data || [], messages, more: msgs.data.length === CHAT_PAGE };
+  return { group: g.data, people: people.data || [], messages, more: msgs.data.length === CHAT_PAGE, reactions: reacts.data || [] };
 }
 const CHAT_FIELDS =
   'id, author_id, body, file_path, file_name, file_type, file_size, file_ready, created_at, reply_to, reply:reply_to(id, author_id, body, file_type, file_name)';
@@ -4493,6 +4550,47 @@ function chatVideoTakeOver(video) {
 document.addEventListener('fullscreenchange', () => chatVideoTakeOver(document.fullscreenElement));
 document.addEventListener('webkitbeginfullscreen', (e) => chatVideoTakeOver(e.target), true);
 
+// Reações embaixo da mensagem: cada emoji com quantas pessoas; tocar mostra quem reagiu.
+function chatReactionsHtml(list, me) {
+  if (!list?.length) return '';
+  const counts = new Map();
+  for (const r of list) counts.set(r.emoji, (counts.get(r.emoji) || 0) + 1);
+  const mine = me && list.find((r) => r.member_id === me.member_id)?.emoji;
+  return `<div class="msg-reactions">${[...counts]
+    .map(([e, n]) => `<button type="button" class="reaction ${mine === e ? 'mine' : ''}" data-chat-react="${e}" aria-label="${e} ${n} ${n === 1 ? 'pessoa' : 'pessoas'}${mine === e ? ', inclusive você' : ''}. Ver quem reagiu">${e}<span>${n}</span></button>`)
+    .join('')}</div>`;
+}
+
+// Reagir (ou tirar, com null): muda na tela na hora e grava no banco; se der erro, volta.
+async function chatReact(id, msgId, emoji) {
+  const data = screenCached(`chat:${id}`);
+  const meId = data && chatMe(data)?.member_id;
+  if (!meId) return;
+  const before = data.reactions || [];
+  data.reactions = before.filter((r) => !(r.message_id === msgId && r.member_id === meId));
+  if (emoji) data.reactions.push({ message_id: msgId, member_id: meId, emoji });
+  chatRepaint(id, data);
+  const { error } = await sb.rpc('chat_set_reaction', { p_message: msgId, p_emoji: emoji });
+  if (error) {
+    data.reactions = before;
+    chatRepaint(id, data);
+    toast(errorText(error), 'error');
+  }
+}
+
+// Quem reagiu a uma mensagem do chat (os nomes vêm dos participantes do grupo).
+async function chatWhoReacted(id, msgId, focus) {
+  const data = screenCached(`chat:${id}`);
+  if (!data) return;
+  const me = chatMe(data);
+  const names = new Map(data.people.map((x) => [x.member_id, x.name]));
+  const people = (data.reactions || [])
+    .filter((r) => r.message_id === msgId)
+    .map((r) => ({ emoji: r.emoji, name: names.get(r.member_id) || 'Ex-participante', mine: !!me && r.member_id === me.member_id }));
+  const choice = await reactionPeople(people, focus);
+  if (choice) chatReact(id, msgId, choice === 'remove' ? null : focus);
+}
+
 // O que a citação mostra de uma mensagem: o tipo do anexo e o começo do texto.
 function chatQuoteText(o) {
   const type = o.file_type || '';
@@ -4515,9 +4613,17 @@ function chatMessagesHtml(data, urls) {
   const me = chatMe(data);
   const names = new Map(data.people.map((p) => [p.member_id, p.name]));
   const byId = new Map(data.messages.map((x) => [x.id, x]));
+  const reacts = new Map();
+  for (const r of data.reactions || []) {
+    if (!reacts.has(r.message_id)) reacts.set(r.message_id, []);
+    reacts.get(r.message_id).push(r);
+  }
   let html = data.more ? '<button type="button" class="btn chat-older" id="chat-older">Ver mensagens anteriores</button>' : '';
   const deletable = data.messages.some((m) => (me && m.author_id === me.member_id) || me?.is_admin);
-  if (deletable) html += `<p class="hint swipe-hint chat-swipe-hint">Mantenha o dedo pressionado ${me?.is_admin ? 'numa mensagem' : 'numa mensagem sua'} para apagar (ou arraste para a esquerda).</p>`;
+  if (data.messages.length && me)
+    html += `<p class="hint swipe-hint chat-swipe-hint">Mantenha o dedo pressionado numa mensagem para reagir ou copiar${
+      deletable ? `; para apagar ${me.is_admin ? '' : 'as suas '}também (ou arraste para a esquerda)` : ''
+    }.</p>`;
   if (!data.messages.length) html += '<p class="chat-empty">Nenhuma mensagem ainda. Diga olá! 👋</p>';
   let day = '';
   let prevAuthor = null;
@@ -4532,16 +4638,17 @@ function chatMessagesHtml(data, urls) {
     const who = m.author_id ? names.get(m.author_id) || 'Ex-participante' : 'Ex-membro';
     const del = mine || me?.is_admin;
     const bubble = `
-      <div class="msg ${mine ? 'mine' : ''} ${del ? 'swipe-row' : ''}" data-id="${m.id}">
+      <div class="msg pressable ${mine ? 'mine' : ''} ${del ? 'swipe-row' : ''}" data-id="${m.id}">
         ${!mine && prevAuthor !== (m.author_id || '-') ? `<span class="msg-author">${esc(who)}</span>` : ''}
         ${m.reply_to ? chatQuoteHtml(m, byId, names, me) : ''}
         ${m.file_path ? chatFileHtml(m, urls[m.file_path]) : ''}
         ${m.body ? `<p class="msg-text">${linkify(m.body)}</p>` : ''}
         <span class="msg-meta">${esc(new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }))}</span>
+        ${chatReactionsHtml(reacts.get(m.id), me)}
       </div>`;
     // Quem pode apagar arrasta a mensagem para a esquerda: o fundo vermelho aparece por trás.
     html += del
-      ? `<div class="swipe msg-swipe pressable ${mine ? 'mine' : ''}" data-id="${m.id}"><span class="swipe-bg" aria-hidden="true">${icon.trash} Apagar</span>${bubble}</div>`
+      ? `<div class="swipe msg-swipe ${mine ? 'mine' : ''}" data-id="${m.id}"><span class="swipe-bg" aria-hidden="true">${icon.trash} Apagar</span>${bubble}</div>`
       : bubble;
     prevAuthor = m.author_id || '-';
   }
@@ -4576,14 +4683,23 @@ function drawChatRoom(id, data, urls = {}) {
     room = document.getElementById('chat-room');
     // A lista de mensagens é a mesma enquanto a conversa está aberta: o gesto é ligado uma vez.
     swipeLeft(document.getElementById('chat-messages'), (wrap) => chatDelete(id, wrap.dataset.id));
-    // Manter o dedo pressionado numa mensagem que a pessoa pode apagar: menu com Apagar (e Copiar texto).
-    longPress(document.getElementById('chat-messages'), '.msg-swipe', async (wrap) => {
-      const m = screenCached(`chat:${id}`)?.messages.find((x) => x.id === wrap.dataset.id);
+    // Manter o dedo pressionado numa mensagem: reagir com emoji, copiar o texto e (quem pode) apagar.
+    longPress(document.getElementById('chat-messages'), '.msg', async (el) => {
+      const data = screenCached(`chat:${id}`);
+      const m = data?.messages.find((x) => x.id === el.dataset.id);
       if (!m) return;
-      const choice = await actionMenu(chatQuoteText(m), [
-        ...(m.body ? [['copiar', 'Copiar texto']] : []),
-        ['apagar', 'Apagar', true],
-      ]);
+      const me = chatMe(data);
+      const current = (data.reactions || []).find((r) => r.message_id === m.id && r.member_id === me?.member_id)?.emoji || null;
+      const ready = !m.file_path || m.file_ready;
+      const choice = await actionMenu(
+        chatQuoteText(m),
+        [...(m.body ? [['copiar', 'Copiar texto']] : []), ...(el.closest('.msg-swipe') ? [['apagar', 'Apagar', true]] : [])],
+        { emojis: me && ready ? REACTIONS : null, current },
+      );
+      if (choice?.startsWith('emoji:')) {
+        const e = choice.slice(6);
+        return chatReact(id, m.id, e === current ? null : e);
+      }
       if (choice === 'apagar') chatDelete(id, m.id);
       if (choice === 'copiar') {
         navigator.clipboard
@@ -4598,7 +4714,9 @@ function drawChatRoom(id, data, urls = {}) {
       const open = e.target.closest('.msg-video-open');
       if (open) return openChatVideo(id, open.dataset.video, open.parentElement.querySelector('video'), open.dataset.id);
       const quote = e.target.closest('.msg-quote');
-      if (quote) chatGoTo(quote.dataset.goto);
+      if (quote) return chatGoTo(quote.dataset.goto);
+      const react = e.target.closest('[data-chat-react]');
+      if (react) chatWhoReacted(id, react.closest('.msg').dataset.id, react.dataset.chatReact);
     });
     // Reserva embaixo a altura do campo de escrever (que cresce com o texto e os emojis).
     const slot = document.getElementById('chat-compose');
@@ -4793,9 +4911,23 @@ function chatListen(id) {
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_messages', filter: `group_id=eq.${id}` }, (p) => chatArrived(id, p.new))
     // Apagadas: o aviso traz só o código da mensagem (e não dá para filtrar por grupo).
     .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'chat_messages' }, (p) => p.old?.id && chatDrop(id, p.old.id))
+    // Reações (027): as de outras pessoas aparecem na hora.
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_reactions', filter: `group_id=eq.${id}` }, (p) => chatReactionArrived(id, p.new))
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_reactions', filter: `group_id=eq.${id}` }, (p) => chatReactionArrived(id, p.new))
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'chat_reactions' }, (p) => chatReactionArrived(id, p.old, true))
     // Conectou (ou reconectou): busca o que chegou entre abrir a conversa e a conexão ficar pronta.
     .subscribe((status) => status === 'SUBSCRIBED' && chatRefresh(id));
   chatLive = { group: id, channel };
+}
+
+function chatReactionArrived(id, row, gone = false) {
+  const data = screenCached(`chat:${id}`);
+  if (!data || !row?.message_id || !row.member_id || !data.messages.some((m) => m.id === row.message_id)) return;
+  const others = (data.reactions || []).filter((r) => !(r.message_id === row.message_id && r.member_id === row.member_id));
+  const next = gone ? others : [...others, { message_id: row.message_id, member_id: row.member_id, emoji: row.emoji }];
+  if (JSON.stringify(next) === JSON.stringify(data.reactions)) return;
+  data.reactions = next;
+  chatRepaint(id, data);
 }
 
 async function chatRefresh(id) {
@@ -5882,6 +6014,7 @@ function drawYearCalendars(all) {
             ${k.file_type === 'application/pdf' ? icon.file : icon.image}
             <span><a href="#/agenda/calendario/${k.id}"><strong>${esc(k.title)} ${k.year}</strong></a>
               <small>${k.file_type === 'application/pdf' ? 'PDF' : 'Imagem'} · ${esc(fmtBytes(k.file_size))}${k.year < y ? ' · ano que passou' : ''}</small></span>
+            <a class="btn small" href="#/agenda/calendarios/${k.id}/editar">Editar</a>
             <button type="button" class="btn small danger-outline" data-del="${k.id}">Apagar</button>
           </div>`,
               )
@@ -5933,6 +6066,69 @@ function drawYearCalendars(all) {
       toast('Calendário enviado. Ele já aparece na Agenda.');
       form.reset();
       changed();
+    } catch (err) {
+      toast(errorText(err), 'error');
+    } finally {
+      btn.disabled = false;
+      status.textContent = '';
+    }
+  });
+}
+
+// Editar o calendário: nome, ano e, se quiser, outro arquivo no lugar (o novo entra e o antigo sai).
+async function viewYearCalendarForm(ctx, id) {
+  if (!requireMemberFeature(`/agenda/calendarios/${id}/editar`, 'agenda')) return;
+  if (!isLeaderRole(myRole())) return navigate('/agenda');
+  const k = await editItem(
+    ctx,
+    screenCached('calendarios:todos')?.find((x) => x.id === id),
+    async () => (await loadAllYearCalendars()).find((x) => x.id === id),
+    () => screenForget('calendarios:todos'),
+  );
+  if (!ctx.alive()) return;
+  if (!k) {
+    toast('Calendário não encontrado.', 'error');
+    return navigate('/agenda/calendarios');
+  }
+  const y = new Date().getFullYear();
+  const years = [...new Set([k.year, y - 1, y, y + 1])].sort();
+  $view.innerHTML = `
+    <form class="form page" id="cal-edit">
+      <a href="#/agenda/calendarios" class="back">← Calendário do ano</a>
+      <h1>Editar calendário</h1>
+      <label>Nome<input name="title" required minlength="2" maxlength="80" value="${esc(k.title)}"></label>
+      <label>Ano<select name="year">${years.map((n) => `<option value="${n}" ${n === k.year ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+      <label>Trocar o arquivo (opcional)<input type="file" name="file" accept="image/jpeg,image/png,image/webp,image/heic,application/pdf"></label>
+      <p class="hint">Hoje: ${k.file_type === 'application/pdf' ? 'PDF' : 'imagem'} de ${esc(fmtBytes(k.file_size))}. Escolhendo outro, ele entra no lugar deste para todos.</p>
+      <button class="btn primary big">Salvar</button>
+      <p class="hint" id="cal-edit-status" aria-live="polite"></p>
+    </form>`;
+  const form = document.getElementById('cal-edit');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const title = form.title.value.trim();
+    const year = Number(form.year.value);
+    const file = form.file.files[0];
+    const btn = form.querySelector('button.primary');
+    const status = document.getElementById('cal-edit-status');
+    btn.disabled = true;
+    try {
+      if (file) {
+        status.textContent = 'Enviando o arquivo novo…';
+        await uploadYearCalendar(file, year, title);
+        // O novo já aparece: o antigo sai.
+        await sb.storage.from('calendarios').remove([k.path]).catch(() => {});
+        const { error } = await sb.from('agenda_calendars').delete().eq('id', k.id);
+        if (error) throw error;
+      } else if (title !== k.title || year !== k.year) {
+        const { data, error } = await sb.from('agenda_calendars').update({ title, year }).eq('id', k.id).select('id');
+        if (error) throw error;
+        if (!data.length) throw new Error('Você não tem permissão para isso.');
+      }
+      screenForget('calendarios');
+      screenForget('calendarios:todos');
+      toast('Calendário salvo.');
+      navigate('/agenda/calendarios');
     } catch (err) {
       toast(errorText(err), 'error');
     } finally {

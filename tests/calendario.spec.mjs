@@ -71,6 +71,32 @@ test('o membro abre o calendário na Agenda, com zoom; abre na hora', async ({ p
   await page.unroute('**/rest/v1/**');
 });
 
+test('a liderança edita o calendário: nome e ano, e troca o arquivo', async ({ page }) => {
+  await openLoggedIn(page, as['lider-a'].session, '/i/teste-a/#/agenda/calendarios');
+  const rows = page.locator('.cal-row').filter({ hasText: title });
+  await expect(rows).toHaveCount(1);
+  // Muda o ano.
+  await rows.getByRole('link', { name: 'Editar' }).click();
+  await expect(page.getByRole('heading', { name: 'Editar calendário' })).toBeVisible();
+  await expect(page.getByLabel('Nome')).toHaveValue(title);
+  await page.getByLabel('Ano').selectOption(String(year + 1));
+  await page.getByRole('button', { name: 'Salvar' }).click();
+  await expect(page.getByText('Calendário salvo.')).toBeVisible();
+  await expect(rows).toHaveCount(1);
+  await expect(rows).toContainText(`${title} ${year + 1}`);
+  // Volta o ano e troca o arquivo: o novo entra no lugar (continua um só).
+  await rows.getByRole('link', { name: 'Editar' }).click();
+  await page.getByLabel('Ano').selectOption(String(year));
+  await page.setViewportSize({ width: 800, height: 600 });
+  const shot = await page.screenshot();
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.getByLabel('Trocar o arquivo (opcional)').setInputFiles({ name: 'novo.png', mimeType: 'image/png', buffer: shot });
+  await page.getByRole('button', { name: 'Salvar' }).click();
+  await expect(page.getByText('Calendário salvo.')).toBeVisible({ timeout: 20000 });
+  await expect(rows).toHaveCount(1);
+  await expect(rows).toContainText(`${title} ${year}`);
+});
+
 test('a liderança apaga o calendário', async ({ page }) => {
   await openLoggedIn(page, as['lider-a'].session, '/i/teste-a/#/agenda/calendarios');
   await page.locator('.cal-row').filter({ hasText: `${title} ${year}` }).getByRole('button', { name: 'Apagar' }).click();

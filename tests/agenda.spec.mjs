@@ -165,8 +165,13 @@ test('o membro reage ao aviso com emoji, troca e tira, e a reação fica gravada
   await Promise.all([saved(), card.getByRole('button', { name: 'Reagir com 👍' }).click()]);
   await expect(card.locator('.reaction.mine')).toHaveText('👍1');
   await expect(card.locator('.reaction', { hasText: '🎉' })).toHaveCount(0);
-  // Tocar na própria reação tira.
-  await Promise.all([saved(), card.locator('.reaction.mine').click()]);
+  // Tocar no emoji mostra quem reagiu (a própria pessoa aparece como "Você"); dali tira a reação.
+  await card.locator('.reaction.mine').click();
+  const who = page.getByRole('dialog');
+  await expect(who.getByRole('heading', { name: 'Reações · 1 pessoa' })).toBeVisible();
+  await expect(who.locator('.who-list li')).toContainText('👍');
+  await expect(who.locator('.who-list li')).toContainText('Você');
+  await Promise.all([saved(), who.getByRole('button', { name: 'Tirar minha reação 👍' }).click()]);
   await expect(card.locator('.reaction.mine')).toHaveCount(0);
   await page.reload();
   await page.waitForLoadState('networkidle');

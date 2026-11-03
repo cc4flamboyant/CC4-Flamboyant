@@ -2,11 +2,16 @@
 // Arquivos do app (SHELL): saem do aparelho na hora. Cada versão publicada tem um cache próprio,
 // baixado inteiro quando este arquivo muda, então nunca se misturam arquivos de versões diferentes.
 // Páginas das instituições de ensino e ícones: do aparelho na hora, atualizados em segundo plano para a próxima vez.
-// Dados do Supabase: sempre da rede.
+// Dados do Supabase: sempre da rede. Fotos das pastas privadas (chat, galeria, projetos…): guardadas
+// no aparelho pelo caminho do arquivo (o link assinado muda a cada vez), para aparecerem na hora.
+// Esse cache (FOTOS) passa de uma versão para outra e é apagado ao sair da conta (js/app.js).
 // O build (scripts/build-site.mjs) acrescenta ao nome do cache um código do conteúdo do app:
 // qualquer mudança de código gera uma versão nova sozinha.
-const CACHE = 'cc4-v32';
+const CACHE = 'cc4-v33';
 const ANDROID = /android/i.test(self.navigator.userAgent);
+const FOTOS = 'cc4-fotos';
+const FOTOS_MAX = 400; // as mais antigas saem
+const SIGNED_IMAGE = /^\/storage\/v1\/object\/sign\//;
 // Service worker de uma instituição de ensino (escopo i/<igreja>/, o mesmo do app instalado) ou da raiz do site.
 const CHURCH_SCOPE = /\/i\/[a-z0-9-]+\/$/.test(new URL(self.registration.scope).pathname);
 const SHELL = [
@@ -39,7 +44,7 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== FOTOS).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
@@ -48,6 +53,11 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
+  // Foto de pasta privada do Supabase: do aparelho, se já veio uma vez.
+  if (req.destination === 'image' && url.hostname.endsWith('.supabase.co') && SIGNED_IMAGE.test(url.pathname)) {
+    e.respondWith(cachedPhoto(req, url));
+    return;
+  }
   const sameOrigin = url.origin === location.origin;
   const cdn = url.hostname === 'cdn.jsdelivr.net';
   if (!sameOrigin && !cdn) return;
@@ -90,6 +100,22 @@ self.addEventListener('fetch', (e) => {
     }),
   );
 });
+
+// A chave é o endereço sem o token: o mesmo arquivo com um link novo continua vindo do aparelho.
+async function cachedPhoto(req, url) {
+  const key = url.origin + url.pathname;
+  const cache = await caches.open(FOTOS);
+  const hit = await cache.match(key);
+  if (hit) return hit;
+  // cors: guarda a resposta de verdade (a "opaca" ocupa muito espaço no aparelho).
+  const res = await fetch(url.href, { mode: 'cors', credentials: 'omit' }).catch(() => null);
+  if (!res) return fetch(req);
+  if (res.ok) {
+    await cache.put(key, res.clone());
+    cache.keys().then((keys) => keys.length > FOTOS_MAX && Promise.all(keys.slice(0, keys.length - FOTOS_MAX).map((k) => cache.delete(k))));
+  }
+  return res;
+}
 
 // Avisos no celular: aniversários, resumos e central (GitHub Actions) e mensagens do chat
 // (Edge Function enviar-push). Como no Desapega: avisa as janelas abertas, não mostra o aviso

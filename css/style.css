@@ -406,6 +406,22 @@ button.member-row { font: inherit; text-align: left; width: 100%; cursor: pointe
 .reaction-picker[hidden] { display: none; }
 .reaction-picker button { border: 0; background: none; font-size: 1.5rem; padding: 4px 6px; border-radius: 999px; cursor: pointer; line-height: 1; }
 .reaction-picker button.mine { background: var(--brand-soft); }
+/* Reações nas mensagens do chat (embaixo da bolha, menores). */
+.msg-reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.msg-reactions .reaction { min-height: 28px; padding: 1px 8px; font-size: .9rem; }
+/* Linha de emojis no alto do menu do chat (manter pressionado). */
+dialog.action-menu .action-emojis { display: flex; justify-content: space-between; gap: 4px; margin: 0 0 12px; }
+dialog.action-menu .action-emojis button {
+  flex: 1; min-height: 48px; border: 0; border-radius: 999px; background: none; font-size: 1.6rem; cursor: pointer; line-height: 1;
+}
+dialog.action-menu .action-emojis button.mine { background: var(--brand-soft); }
+/* Quem reagiu. */
+.who-list { list-style: none; margin: 0 0 14px; padding: 0; max-height: 50vh; overflow-y: auto; }
+.who-list li { display: flex; align-items: center; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--line); }
+.who-list li:last-child { border-bottom: 0; }
+.who-emoji { font-size: 1.4rem; width: 32px; text-align: center; }
+.who-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.who-list small { color: var(--muted); }
 .tags-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .notice-mini { padding: 8px 0; border-bottom: 1px solid var(--line); }
 .notice-mini p { margin: 4px 0 0; color: var(--muted); }
