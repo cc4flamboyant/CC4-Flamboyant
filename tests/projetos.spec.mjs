@@ -62,6 +62,28 @@ test('a liderança cria o projeto da sala, com etapa e arquivo', async ({ page }
   await page.locator('#project-files').setInputFiles({ name: 'roteiro.txt', mimeType: 'text/plain', buffer: Buffer.from('Roteiro da feira') });
   await expect(page.getByText('1 arquivo enviado.')).toBeVisible({ timeout: 15000 });
   await expect(page.locator('.project-file a.msg-doc')).toContainText('roteiro.txt');
+  // Bloco "Gerenciar projeto" (no modelo da agenda).
+  await expect(page.getByRole('heading', { name: 'Gerenciar projeto' })).toBeVisible();
+
+  // Foto: miniatura com o "ver"; abre em tela cheia no app, com Voltar flutuando.
+  const shot = await page.screenshot();
+  await page.locator('#project-files').setInputFiles({ name: 'foto-feira.png', mimeType: 'image/png', buffer: shot });
+  const tile = page.getByRole('button', { name: /Ver a foto foto-feira/ });
+  await expect(tile).toBeEnabled({ timeout: 20000 });
+  await expect(page.getByText('Toque numa foto ou vídeo para ver em tela cheia.')).toBeVisible();
+  await tile.click();
+  const viewer = page.getByRole('dialog', { name: /foto-feira/ });
+  await expect(viewer).toBeVisible();
+  await expect(viewer.locator('#viewer-img')).toBeVisible();
+  await viewer.getByRole('button', { name: 'Voltar' }).click();
+  await expect(viewer).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  // O voltar do celular também fecha, sem sair do projeto.
+  await tile.click();
+  await expect(viewer).toBeVisible();
+  await page.goBack();
+  await expect(viewer).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
 });
 
 test('o responsável da sala vê o projeto e comenta; abre na hora', async ({ page }) => {

@@ -615,6 +615,8 @@ const icon = {
   expand: '<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
   users: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.3a6.5 6.5 0 0 1 3.5 5.7"/></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  eye: '<svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  play: '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>',
   reply: '<svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
   copy: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg>',
   pencil: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></svg>',
@@ -5750,18 +5752,78 @@ async function viewProject(ctx, id) {
   await showWithGalleryLinks(ctx, `projeto:${id}`, () => loadProject(id), projectFiles, (d, urls) => drawProject(id, d, urls), 'projetos');
 }
 
+const isViewable = (type) => /^image\/(jpeg|png|webp|gif)$/.test(type || '') || /^video\//.test(type || '');
+
+// Foto ou vídeo: miniatura com o "ver" no canto (abre na tela cheia do app).
+function projectMediaHtml(f, url, edit) {
+  const name = esc(f.file_name);
+  const video = /^video\//.test(f.file_type || '');
+  const del = edit ? `<button type="button" class="media-del" data-del-file="${f.id}" aria-label="Apagar ${name}" title="Apagar">${icon.trash}</button>` : '';
+  const thumb = !url
+    ? '<span class="thumb-wait" aria-hidden="true"></span>'
+    : video
+      ? `<video src="${esc(url)}#t=0.1" preload="metadata" muted playsinline tabindex="-1"></video>`
+      : `<img src="${esc(url)}" alt="" loading="lazy">`;
+  return `
+    <div class="media-tile">
+      <button type="button" class="media-open" data-view-file="${f.id}" aria-label="Ver ${video ? 'o vídeo' : 'a foto'} ${name}" ${url ? '' : 'disabled'}>
+        ${thumb}
+        <span class="media-badge" aria-hidden="true">${video ? icon.play : icon.eye}</span>
+      </button>
+      ${del}
+    </div>`;
+}
+
+// Documento ou áudio: uma linha com o nome, o tamanho e "Abrir" (ou o player do áudio).
 function projectFileHtml(f, url, edit) {
   const name = esc(f.file_name);
   const del = edit ? `<button type="button" class="msg-del" data-del-file="${f.id}" aria-label="Apagar ${name}" title="Apagar">${icon.trash}</button>` : '';
   const type = f.file_type || '';
   let body;
   if (!url) body = `<span class="msg-doc">${icon.file}<span>${name}<small>${esc(fmtBytes(f.file_size))}</small></span></span>`;
-  else if (/^image\/(jpeg|png|webp|gif)$/.test(type)) body = `<a class="msg-img" href="${esc(url)}" target="_blank" rel="noopener"><img src="${esc(url)}" alt="${name}" loading="lazy"></a>`;
-  else if (/^video\//.test(type)) body = `<video class="msg-video" src="${esc(url)}" controls preload="metadata" playsinline></video>`;
-  else if (/^audio\//.test(type)) body = `<audio class="msg-audio" src="${esc(url)}" controls preload="none"></audio>`;
-  else body = `<a class="msg-doc" href="${esc(url)}" target="_blank" rel="noopener">${icon.file}<span>${name}<small>${esc(fmtBytes(f.file_size))} · Abrir</small></span></a>`;
+  else if (/^audio\//.test(type)) body = `<span class="file-audio"><small>${name}</small><audio class="msg-audio" src="${esc(url)}" controls preload="none"></audio></span>`;
+  else body = `<a class="msg-doc" href="${esc(url)}" target="_blank" rel="noopener">${icon.file}<span>${name}<small>${esc(fmtBytes(f.file_size))} · Abrir ${icon.external}</small></span></a>`;
   return `<div class="project-file">${body}${del}</div>`;
 }
+
+// Tela cheia do app para uma foto (com zoom) ou um vídeo: Voltar flutuando no alto; o voltar do
+// celular também fecha.
+let mediaViewer = null;
+function openMediaViewer({ url, type, name }) {
+  closeMediaViewer(false);
+  const video = /^video\//.test(type || '');
+  const el = document.createElement('div');
+  el.className = 'video-viewer media-viewer';
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-modal', 'true');
+  el.setAttribute('aria-label', name || (video ? 'Vídeo' : 'Foto'));
+  el.innerHTML = `
+    <button type="button" class="viewer-back" aria-label="Voltar">${icon.back} <span>Voltar</span></button>
+    ${name ? `<p class="viewer-name">${esc(name)}</p>` : ''}
+    ${
+      video
+        ? `<video src="${esc(url)}" controls controlslist="nofullscreen" disablepictureinpicture playsinline autoplay></video>`
+        : `<div class="zoom-box viewer-zoom" id="viewer-zoom"><img id="viewer-img" src="${esc(url)}" alt="${esc(name || '')}" draggable="false"></div>`
+    }`;
+  document.body.appendChild(el);
+  document.documentElement.classList.add('viewer-open');
+  if (!video) bindZoom(el.querySelector('#viewer-zoom'), el.querySelector('#viewer-img'));
+  history.pushState({ mediaViewer: true }, '');
+  mediaViewer = el;
+  el.querySelector('.viewer-back').onclick = () => closeMediaViewer();
+}
+function closeMediaViewer(back = true) {
+  if (!mediaViewer) return;
+  const el = mediaViewer;
+  mediaViewer = null;
+  el.querySelector('video')?.pause();
+  el.remove();
+  document.documentElement.classList.remove('viewer-open');
+  if (back && history.state?.mediaViewer) history.back();
+}
+window.addEventListener('popstate', () => closeMediaViewer(false));
+window.addEventListener('hashchange', () => closeMediaViewer(false));
+document.addEventListener('keydown', (e) => e.key === 'Escape' && closeMediaViewer());
 
 function drawProject(id, data, urls = {}) {
   const p = data.project;
@@ -5776,8 +5838,15 @@ function drawProject(id, data, urls = {}) {
       <a href="#/projetos?sala=${encodeURIComponent(p.room_id)}" class="back">← Projetos</a>
       <h1>${esc(p.title)}</h1>
       <p class="hint">Sala ${esc(p.room?.name || '')}${projectDates(p) ? ` · ${esc(projectDates(p))}` : ''}</p>
-      ${edit ? `<div class="actions-row"><a class="btn" href="#/projetos/${id}/editar">${icon.gear} Editar projeto</a></div>` : ''}
       ${p.description ? `<p class="pre">${linkify(p.description)}</p>` : ''}
+      ${
+        edit
+          ? `<section class="card event-manage" aria-label="Gerenciar projeto">
+              <h2>Gerenciar projeto</h2>
+              <a class="menu-row" href="#/projetos/${id}/editar">${icon.pencil}<span>Editar projeto<small>Título, sala, datas e descrição</small></span>${icon.chevron}</a>
+            </section>`
+          : ''
+      }
 
       <section class="card">
         <h2>${icon.clipboard} Etapas${data.steps.length ? ` <small class="hint">${done} de ${data.steps.length} feitas</small>` : ''}</h2>
@@ -5811,8 +5880,15 @@ function drawProject(id, data, urls = {}) {
       </section>
 
       <section class="card">
-        <h2>${icon.image} Arquivos e fotos</h2>
-        ${data.files.length ? `<div class="project-files">${data.files.map((f) => projectFileHtml(f, urls[f.path], edit)).join('')}</div>` : '<p class="hint">Nenhum arquivo ainda.</p>'}
+        <h2>${icon.image} Arquivos e fotos${data.files.length ? ` <small class="hint">${data.files.length}</small>` : ''}</h2>
+        ${(() => {
+          const media = data.files.filter((f) => isViewable(f.file_type));
+          const docs = data.files.filter((f) => !isViewable(f.file_type));
+          if (!data.files.length) return '<p class="hint">Nenhum arquivo ainda.</p>';
+          return `
+            ${media.length ? `<p class="hint">${icon.eye} Toque numa foto ou vídeo para ver em tela cheia.</p><div class="media-grid">${media.map((f) => projectMediaHtml(f, urls[f.path], edit)).join('')}</div>` : ''}
+            ${docs.length ? `<div class="project-files">${docs.map((f) => projectFileHtml(f, urls[f.path], edit)).join('')}</div>` : ''}`;
+        })()}
         ${
           edit
             ? `<label class="btn">${icon.upload} Adicionar arquivos<input type="file" id="project-files" accept="${CHAT_ACCEPT}" multiple hidden></label>
@@ -5887,6 +5963,13 @@ function drawProject(id, data, urls = {}) {
     if (error) return toast(errorText(error), 'error');
     data.steps.push(rows[0]);
     save();
+  });
+  $view.querySelectorAll('[data-view-file]').forEach((b) => {
+    b.onclick = () => {
+      const f = data.files.find((x) => x.id === b.dataset.viewFile);
+      const url = f && (urls[f.path] || knownGallery([f.path], 'projetos')[f.path]);
+      if (url) openMediaViewer({ url, type: f.file_type, name: f.file_name });
+    };
   });
   $view.querySelectorAll('[data-del-file]').forEach(
     (b) =>
@@ -6022,6 +6105,8 @@ function drawProjectForm(id, p, rooms) {
     <form class="form page" id="project-form">
       <a href="${id ? `#/projetos/${id}` : '#/projetos'}" class="back">← ${id ? esc(p.title) : 'Projetos'}</a>
       <h1>${id ? 'Editar projeto' : 'Novo projeto'}</h1>
+      <section class="card form-block">
+      <h2>Sobre o projeto</h2>
       ${
         id
           ? `<label>Sala<select name="room_id" required>${projectRoomOptions(p, rooms)}</select></label>
@@ -6034,14 +6119,27 @@ function drawProjectForm(id, p, rooms) {
               <p class="hint">Veem o projeto: o tutor, a liderança e os responsáveis das crianças desta sala.</p>`
             : '<p class="notice">Você ainda não cuida de nenhuma sala. A liderança escolhe o tutor de cada sala.</p>'
       }
-      <label>Título<input name="title" required minlength="2" maxlength="120" value="${esc(p.title || '')}" placeholder="Ex.: Feira de ciências"></label>
-      <label>Descrição (opcional)<textarea name="description" maxlength="4000" rows="5" placeholder="O que é o projeto, o que as crianças vão fazer, o que os pais precisam saber">${esc(p.description || '')}</textarea></label>
-      <div class="row2">
-        <label>Começa em (opcional)<input name="starts_on" type="date" value="${esc(p.starts_on || '')}"></label>
-        <label>Entrega em (opcional)<input name="due_on" type="date" value="${esc(p.due_on || '')}"></label>
-      </div>
+        <label>Título<input name="title" required minlength="2" maxlength="120" value="${esc(p.title || '')}" placeholder="Ex.: Feira de ciências"></label>
+        <label>Descrição (opcional)<textarea name="description" maxlength="4000" rows="5" placeholder="O que é o projeto, o que as crianças vão fazer, o que os pais precisam saber">${esc(p.description || '')}</textarea></label>
+      </section>
+      <section class="card form-block">
+        <h2>Datas</h2>
+        <div class="row2">
+          <label>Começa em (opcional)<input name="starts_on" type="date" value="${esc(p.starts_on || '')}"></label>
+          <label>Entrega em (opcional)<input name="due_on" type="date" value="${esc(p.due_on || '')}"></label>
+        </div>
+        <p class="hint">A entrega aparece na Agenda de quem vê o projeto.</p>
+      </section>
       <button class="btn primary big">${id ? 'Salvar' : 'Criar projeto'}</button>
-      ${id ? '<button type="button" class="btn danger-outline" id="delete-project">Apagar projeto</button>' : '<p class="hint">Ao criar, os pais da sala recebem um aviso. Depois, dentro do projeto, você coloca as etapas, os arquivos e as fotos.</p>'}
+      ${
+        id
+          ? `<section class="card form-block danger-block">
+              <h2>Apagar projeto</h2>
+              <p class="hint">As etapas, os arquivos, as fotos e os comentários são apagados junto. Não dá para desfazer.</p>
+              <button type="button" class="btn danger-outline" id="delete-project">${icon.trash} Apagar projeto</button>
+            </section>`
+          : '<p class="hint">Ao criar, os pais da sala recebem um aviso. Depois, dentro do projeto, você coloca as etapas, os arquivos e as fotos.</p>'
+      }
     </form>`;
   const form = document.getElementById('project-form');
   form.room_id?.addEventListener('change', () => (form.room_id.dataset.touched = '1'));
@@ -6271,9 +6369,11 @@ function bindZoom(box, img) {
     e.preventDefault();
     zoomTo(scale * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
   }, { passive: false });
-  document.getElementById('zoom-in').onclick = () => zoomTo(scale * 1.5);
-  document.getElementById('zoom-out').onclick = () => zoomTo(scale / 1.5);
-  document.getElementById('zoom-reset').onclick = () => zoomTo(1);
+  // Botões de zoom (só na tela do calendário; a tela cheia dos projetos usa os dedos).
+  const btn = (bid) => document.getElementById(bid);
+  if (btn('zoom-in')) btn('zoom-in').onclick = () => zoomTo(scale * 1.5);
+  if (btn('zoom-out')) btn('zoom-out').onclick = () => zoomTo(scale / 1.5);
+  if (btn('zoom-reset')) btn('zoom-reset').onclick = () => zoomTo(1);
   img.addEventListener('load', apply);
 }
 
@@ -6493,11 +6593,22 @@ const knownGallery = (paths, bucket = 'galeria') => {
 
 // Desenha na hora com os links já conhecidos e de novo quando os que faltam chegam.
 async function showWithGalleryLinks(ctx, name, fetcher, pathsOf, draw, bucket = 'galeria') {
-  await screenShow(ctx, name, fetcher, (data) => draw(data, knownGallery(pathsOf(data), bucket)));
+  // Lembra se a tela foi desenhada sem algum link: se o link chegou depois (busca em segundo
+  // plano terminando no mesmo instante), desenha de novo com ele.
+  let missing = false;
+  await screenShow(ctx, name, fetcher, (data) => {
+    const paths = pathsOf(data);
+    const known = knownGallery(paths, bucket);
+    missing = paths.some((p) => !known[p]);
+    draw(data, known);
+  });
   const data = screenCached(name);
   if (!data || !ctx.alive()) return;
   const paths = pathsOf(data);
-  if (paths.every((p) => knownGallery([p], bucket)[p])) return;
+  if (paths.every((p) => knownGallery([p], bucket)[p])) {
+    if (missing) draw(data, knownGallery(paths, bucket));
+    return;
+  }
   const urls = await galleryUrls(paths, bucket).catch(() => ({}));
   if (ctx.alive()) draw(data, urls);
 }

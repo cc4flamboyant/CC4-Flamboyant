@@ -1248,6 +1248,43 @@ body.in-chat-room.keyboard-open .tabbar { display: none; }
 .project-files { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 12px; }
 .project-file { display: flex; align-items: flex-start; gap: 6px; }
 .project-file > :first-child { flex: 1; min-width: 0; }
+.project-file .msg-doc small svg { width: 14px; height: 14px; vertical-align: -2px; }
+.file-audio { display: flex; flex-direction: column; gap: 4px; }
+.file-audio small { color: var(--muted); }
+/* Fotos e vídeos do projeto: miniaturas em grade, com o "ver" no canto. */
+.media-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0 12px; }
+.media-tile { position: relative; }
+.media-open {
+  position: relative; display: block; width: 100%; aspect-ratio: 1; padding: 0; border: 0; border-radius: 10px;
+  overflow: hidden; background: var(--line); cursor: zoom-in;
+}
+.media-open img, .media-open video { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.media-open .thumb-wait { position: absolute; inset: 0; }
+.media-open:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+.media-badge {
+  position: absolute; right: 6px; bottom: 6px; display: grid; place-items: center; width: 30px; height: 30px;
+  border-radius: 50%; background: rgb(0 0 0 / .55); color: #fff;
+}
+.media-badge svg { width: 18px; height: 18px; }
+.media-del {
+  position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 30px; height: 30px; padding: 0;
+  border: 0; border-radius: 50%; background: rgb(0 0 0 / .55); color: #fff; cursor: pointer;
+}
+.media-del svg { width: 16px; height: 16px; }
+.card h2 small.hint { font-weight: 400; }
+/* Visualização em tela cheia (projetos): foto com zoom ou vídeo. */
+.media-viewer .viewer-name {
+  position: absolute; top: calc(18px + env(safe-area-inset-top)); left: 130px; right: 16px; margin: 0;
+  color: rgb(255 255 255 / .8); font-size: .85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.media-viewer { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+.viewer-zoom { width: 100%; height: 100%; border: 0; border-radius: 0; background: #000; display: grid; place-items: center; }
+.viewer-zoom img { max-height: 100%; width: 100%; height: auto; object-fit: contain; }
+/* Formulário em blocos. */
+.form-block { display: flex; flex-direction: column; gap: 12px; }
+.form-block h2 { font-size: 1rem; margin: 0; }
+.danger-block { border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); }
+.danger-block h2 { color: var(--danger); }
 .comments { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 12px; }
 .comment { padding: 8px 12px; border-radius: 12px; background: color-mix(in srgb, var(--line) 45%, transparent); position: relative; }
 .comment .msg-del { position: absolute; top: 6px; right: 6px; }
