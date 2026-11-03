@@ -81,6 +81,32 @@ test('a líder publica um aviso fixado e o membro vê no mural e no início', as
   await member.context().close();
 });
 
+test('o membro busca nos avisos pelo título e pelo texto, sem acento e sem maiúsculas', async ({ page }) => {
+  await openLoggedIn(page, as['membro-a'].session, '/i/teste-a/#/avisos');
+  const card = page.locator('.announcement', { hasText: `Aviso ${tag}` });
+  await expect(card).toBeVisible();
+  const search = page.getByRole('searchbox', { name: 'Buscar nos avisos' });
+  // Pelo texto, sem acento e em maiúsculas.
+  await search.fill('CORAL NO SABADO');
+  await expect(card).toBeVisible();
+  // Pelo título: só o aviso do teste.
+  await search.fill(tag);
+  await expect(page.locator('.announcement')).toHaveCount(1);
+  await expect(page.locator('#announcement-count')).toHaveText('1 aviso encontrado');
+  // Reagir não apaga a busca nem fecha o teclado.
+  await card.getByRole('button', { name: 'Reagir com emoji' }).click();
+  await expect(card.locator('.reaction-picker')).toBeVisible();
+  await expect(search).toHaveValue(tag);
+  // Nada encontrado.
+  await search.fill('xyzw nada aqui');
+  await expect(page.locator('.announcement')).toHaveCount(0);
+  await expect(page.getByText('Nenhum aviso com “xyzw nada aqui”.')).toBeVisible();
+  // Limpa: volta tudo.
+  await search.fill('');
+  await expect(card).toBeVisible();
+  await expect(page.locator('#announcement-count')).toHaveText('');
+});
+
 test('o membro reage ao aviso com emoji, troca e tira, e a reação fica gravada', async ({ page }) => {
   await openLoggedIn(page, as['membro-a'].session, '/i/teste-a/#/avisos');
   const card = page.locator('.announcement', { hasText: `Aviso ${tag}` });

@@ -3177,8 +3177,12 @@ function reactionsBar(a) {
     </div>`;
 }
 
+// O que a pessoa digitou na busca dos avisos (continua quando a lista se atualiza).
+let announcementQuery = '';
+
 async function viewAnnouncements(ctx) {
   if (!requireMemberFeature('/avisos', 'avisos')) return;
+  announcementQuery = '';
   await screenShow(ctx, 'avisos', loadAnnouncements, drawAnnouncements);
 }
 
@@ -3186,16 +3190,32 @@ function drawAnnouncements(all) {
   const leader = isLeaderRole(myRole());
   const today = isoLocal(new Date());
   // O guardado pode ser de outro dia: para os membros, some o que venceu.
-  const rows = leader ? all : all.filter((a) => !a.visible_until || a.visible_until >= today);
+  const visible = leader ? all : all.filter((a) => !a.visible_until || a.visible_until >= today);
   $view.innerHTML = `
     <div class="page">
       <h1>Avisos</h1>
       ${
-        rows.length
-          ? rows
-              .map((a) => {
-                const expired = a.visible_until && a.visible_until < today;
-                return `
+        visible.length
+          ? `<label class="search">${icon.search}<input type="search" id="announcement-q" placeholder="Buscar nos avisos" aria-label="Buscar nos avisos" value="${esc(announcementQuery)}"></label>
+             <p class="hint" id="announcement-count" aria-live="polite"></p>`
+          : ''
+      }
+      <div id="announcements"></div>
+      ${leader ? fab('#/avisos/novo', 'Novo aviso') : ''}
+    </div>`;
+  const box = document.getElementById('announcements');
+  const q = document.getElementById('announcement-q');
+  // Só a lista muda ao digitar (o campo continua com o teclado aberto).
+  const fill = () => {
+    const term = fold(announcementQuery.trim());
+    const rows = term ? visible.filter((a) => fold(a.title).includes(term) || fold(a.body).includes(term)) : visible;
+    const count = document.getElementById('announcement-count');
+    if (count) count.textContent = term ? (rows.length ? `${rows.length} ${rows.length === 1 ? 'aviso encontrado' : 'avisos encontrados'}` : '') : '';
+    box.innerHTML = rows.length
+      ? rows
+          .map((a) => {
+            const expired = a.visible_until && a.visible_until < today;
+            return `
             <article class="card announcement ${expired ? 'expired' : ''}">
               <div class="tags-row">
                 ${a.pinned ? '<span class="tag role">Fixado</span>' : ''}
@@ -3207,14 +3227,24 @@ function drawAnnouncements(all) {
               ${reactionsBar(a)}
               ${leader ? `<div class="actions-row"><a class="btn small" href="#/avisos/${a.id}/editar">Editar</a><button class="btn small danger-outline" data-delete="${a.id}">Excluir</button></div>` : ''}
             </article>`;
-              })
-              .join('')
-          : `<div class="empty"><p>Nenhum aviso por enquanto.</p></div>`
-      }
-      ${leader ? fab('#/avisos/novo', 'Novo aviso') : ''}
-    </div>`;
+          })
+          .join('')
+      : term
+        ? `<div class="empty"><p>Nenhum aviso com “${esc(announcementQuery.trim())}”.</p></div>`
+        : `<div class="empty"><p>Nenhum aviso por enquanto.</p></div>`;
+    wireAnnouncements(all, box, fill);
+  };
+  q?.addEventListener('input', () => {
+    announcementQuery = q.value;
+    fill();
+  });
+  fill();
+}
+
+// Reações e excluir nos cartões dos avisos; redesenha só a lista (fill).
+function wireAnnouncements(all, box, fill) {
   // Reagir: muda na tela na hora (e no guardado) e grava no banco; se der erro, volta como estava.
-  $view.querySelectorAll('[data-reactions]').forEach((bar) => {
+  box.querySelectorAll('[data-reactions]').forEach((bar) => {
     bar.onclick = async (ev) => {
       const btn = ev.target.closest('button');
       if (!btn) return;
@@ -3234,17 +3264,17 @@ function drawAnnouncements(all) {
       if (next) a.reactions[next] = (a.reactions[next] || 0) + 1;
       a.mine = next;
       screenUpdate('avisos', all);
-      drawAnnouncements(all);
+      fill();
       const { error } = await sb.rpc('set_announcement_reaction', { p_announcement: a.id, p_emoji: next });
       if (error) {
         Object.assign(a, before);
         screenUpdate('avisos', all);
-        if (location.hash === '#/avisos') drawAnnouncements(all); // ainda na tela dos avisos
+        if (box.isConnected) fill(); // ainda na tela dos avisos
         toast(errorText(error), 'error');
       }
     };
   });
-  $view.querySelectorAll('[data-delete]').forEach((b) => {
+  box.querySelectorAll('[data-delete]').forEach((b) => {
     b.onclick = async () => {
       if (!await ask('Excluir este aviso?')) return;
       const { data, error: err } = await sb.from('announcements').delete().eq('id', b.dataset.delete).select('id');
