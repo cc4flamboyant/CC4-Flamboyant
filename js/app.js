@@ -342,9 +342,10 @@ function longPress(container, selector, onPress) {
     container.querySelector('.pressing')?.classList.remove('pressing');
   };
   container.addEventListener('pointerdown', (e) => {
+    // Toque novo: o pressionar anterior (que abriu o menu) já passou; este toque vale.
+    fired = false;
     const item = e.target.closest(selector);
     if (!item || skip(e.target) || (e.pointerType === 'mouse' && e.button !== 0)) return;
-    fired = false;
     start = { x: e.clientX, y: e.clientY };
     item.classList.add('pressing');
     timer = setTimeout(() => {
@@ -615,6 +616,7 @@ const icon = {
   expand: '<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
   users: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.3a6.5 6.5 0 0 1 3.5 5.7"/></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  camera: '<svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>',
   eye: '<svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
   play: '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>',
   reply: '<svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
@@ -4577,12 +4579,12 @@ function chatFileHtml(m, url) {
   if (!url) return `<span class="msg-doc">${icon.file}<span>${name}<small>${esc(fmtBytes(m.file_size))}</small></span></span>`;
   const type = m.file_type || '';
   if (/^image\/(jpeg|png|webp|gif)$/.test(type))
-    return `<a class="msg-img" href="${esc(url)}" target="_blank" rel="noopener"><img src="${esc(url)}" alt="${name}" loading="lazy"></a>`;
+    return `<a class="msg-img" href="${esc(url)}" data-view-msg="${esc(m.id)}"><img src="${esc(url)}" alt="${name}" loading="lazy"></a>`;
   // Vídeo: a tela cheia é a do app (com Voltar e o campo de escrever), não a do celular.
   if (/^video\//.test(type))
     return `<span class="msg-video-wrap"><video class="msg-video" src="${esc(url)}" controls controlslist="nofullscreen" disablepictureinpicture preload="metadata" playsinline></video><button type="button" class="msg-video-open" data-video="${esc(url)}" data-id="${esc(m.id)}" aria-label="Ver o vídeo em tela cheia">${icon.expand}</button></span>`;
   if (/^audio\//.test(type)) return `<audio class="msg-audio" src="${esc(url)}" controls preload="none"></audio>`;
-  return `<a class="msg-doc" href="${esc(url)}" target="_blank" rel="noopener">${icon.file}<span>${name}<small>${esc(fmtBytes(m.file_size))} · Abrir</small></span></a>`;
+  return `<a class="msg-doc" href="${esc(url)}" data-view-msg="${esc(m.id)}">${icon.file}<span>${name}<small>${esc(fmtBytes(m.file_size))} · ${/pdf/.test(type) ? 'Ver' : 'Abrir'}</small></span></a>`;
 }
 
 // ---------------------------------------------------------------------
@@ -4868,7 +4870,14 @@ function drawChatRoom(id, data, urls = {}) {
       const quote = e.target.closest('.msg-quote');
       if (quote) return chatGoTo(quote.dataset.goto);
       const react = e.target.closest('[data-chat-react]');
-      if (react) chatWhoReacted(id, react.closest('.msg').dataset.id, react.dataset.chatReact);
+      if (react) return chatWhoReacted(id, react.closest('.msg').dataset.id, react.dataset.chatReact);
+      // Foto ou documento: abre dentro do app (com Voltar), não numa aba do navegador.
+      const file = e.target.closest('[data-view-msg]');
+      if (file) {
+        e.preventDefault();
+        const m = screenCached(`chat:${id}`)?.messages.find((x) => x.id === file.dataset.viewMsg);
+        if (m) openFileViewer({ url: file.getAttribute('href'), type: m.file_type, name: m.file_name, size: m.file_size });
+      }
     });
     // Reserva embaixo a altura do campo de escrever (que cresce com o texto e os emojis).
     const slot = document.getElementById('chat-compose');
@@ -5788,13 +5797,97 @@ function projectFileHtml(f, url, edit) {
   let body;
   if (!url) body = `<span class="msg-doc">${icon.file}<span>${name}<small>${esc(fmtBytes(f.file_size))}</small></span></span>`;
   else if (/^audio\//.test(type)) body = `<span class="file-audio"><small>${name}</small><audio class="msg-audio" src="${esc(url)}" controls preload="none"></audio></span>`;
-  else body = `<a class="msg-doc" href="${esc(url)}" target="_blank" rel="noopener">${icon.file}<span>${name}<small>${esc(fmtBytes(f.file_size))} · Abrir ${icon.external}</small></span></a>`;
+  else body = `<button type="button" class="msg-doc doc-open" data-view-file="${f.id}">${icon.file}<span>${name}<small>${esc(fmtBytes(f.file_size))} · ${/pdf/.test(type) || /\.pdf$/i.test(f.file_name || '') ? 'Ver' : 'Abrir'}</small></span></button>`;
   return `<div class="project-file">${body}${del}</div>`;
 }
 
 // Tela cheia do app para uma foto (com zoom) ou um vídeo: Voltar flutuando no alto; o voltar do
 // celular também fecha.
 let mediaViewer = null;
+const PDFJS = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build';
+let pdfjsLoading = null;
+const loadPdfJs = () =>
+  (pdfjsLoading ||= import(`${PDFJS}/pdf.min.mjs`).then((m) => {
+    m.GlobalWorkerOptions.workerSrc = `${PDFJS}/pdf.worker.min.mjs`;
+    return m;
+  }));
+
+// Abre qualquer arquivo dentro do app, com o Voltar flutuando: foto (zoom), vídeo, PDF (páginas
+// uma embaixo da outra) ou, para os outros documentos, um cartão com Abrir no celular e Compartilhar.
+function openFileViewer({ url, type, name, size }) {
+  type = type || '';
+  if (/^image\/(jpeg|png|webp|gif)$/.test(type) || /^video\//.test(type)) return openMediaViewer({ url, type, name });
+  closeMediaViewer(false);
+  const pdf = type === 'application/pdf' || /\.pdf$/i.test(name || '');
+  const el = document.createElement('div');
+  el.className = 'video-viewer media-viewer doc-viewer';
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-modal', 'true');
+  el.setAttribute('aria-label', name || 'Arquivo');
+  const share = !!navigator.canShare;
+  el.innerHTML = `
+    <button type="button" class="viewer-back" aria-label="Voltar">${icon.back} <span>Voltar</span></button>
+    ${name ? `<p class="viewer-name">${esc(name)}</p>` : ''}
+    ${
+      pdf
+        ? `<div class="pdf-pages" id="pdf-pages"><p class="pdf-wait" aria-live="polite">Abrindo o PDF…</p></div>`
+        : `<div class="doc-card">
+            <span class="doc-icon">${icon.file}</span>
+            <strong>${esc(name || 'Arquivo')}</strong>
+            ${size ? `<small>${esc(fmtBytes(size))}</small>` : ''}
+            <p class="hint">Este tipo de arquivo abre num aplicativo do celular.</p>
+          </div>`
+    }
+    <div class="viewer-actions">
+      <a class="btn" href="${esc(url)}" target="_blank" rel="noopener" download="${esc(name || '')}">${icon.external} Abrir no celular</a>
+      ${share ? `<button type="button" class="btn" id="viewer-share">${icon.send} Compartilhar</button>` : ''}
+    </div>`;
+  document.body.appendChild(el);
+  document.documentElement.classList.add('viewer-open');
+  history.pushState({ mediaViewer: true }, '');
+  mediaViewer = el;
+  el.querySelector('.viewer-back').onclick = () => closeMediaViewer();
+  el.querySelector('#viewer-share')?.addEventListener('click', async () => {
+    try {
+      const blob = await (await fetch(url)).blob();
+      const file = new File([blob], name || 'arquivo', { type: blob.type || type });
+      if (navigator.canShare({ files: [file] })) await navigator.share({ files: [file], title: name });
+      else await navigator.share({ url, title: name });
+    } catch (err) {
+      if (err?.name !== 'AbortError') toast('Não deu para compartilhar agora.', 'error');
+    }
+  });
+  if (pdf) renderPdf(url, el.querySelector('#pdf-pages'), el);
+}
+
+// Desenha as páginas do PDF na largura da tela (mais nítidas em telas de alta definição).
+async function renderPdf(url, box, el) {
+  try {
+    const pdfjs = await loadPdfJs();
+    const doc = await pdfjs.getDocument({ url, isEvalSupported: false }).promise;
+    if (!el.isConnected) return;
+    box.innerHTML = '';
+    const width = Math.min(box.clientWidth - 16, 900);
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    for (let n = 1; n <= doc.numPages; n++) {
+      const page = await doc.getPage(n);
+      if (!el.isConnected) return;
+      const base = page.getViewport({ scale: 1 });
+      const vp = page.getViewport({ scale: (width / base.width) * ratio });
+      const canvas = document.createElement('canvas');
+      canvas.width = vp.width;
+      canvas.height = vp.height;
+      canvas.style.width = `${width}px`;
+      canvas.setAttribute('role', 'img');
+      canvas.setAttribute('aria-label', `Página ${n} de ${doc.numPages}`);
+      box.append(canvas);
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+    }
+  } catch {
+    if (el.isConnected) box.innerHTML = '<p class="pdf-wait">Não deu para mostrar o PDF aqui. Toque em <strong>Abrir no celular</strong>.</p>';
+  }
+}
+
 function openMediaViewer({ url, type, name }) {
   closeMediaViewer(false);
   const video = /^video\//.test(type || '');
@@ -5897,8 +5990,22 @@ function drawProject(id, data, urls = {}) {
         })()}
         ${
           edit
-            ? `<label class="btn">${icon.upload} Adicionar arquivos<input type="file" id="project-files" accept="${CHAT_ACCEPT}" multiple hidden></label>
-               <p class="hint" id="project-status" aria-live="polite">Fotos, vídeos, áudios e documentos de até 25 MB.</p>`
+            ? `<div class="upload-zone" id="upload-zone">
+                 <label class="save-tile upload-tile">
+                   <span class="save-icon">${icon.camera}</span><strong>Tirar foto</strong><small>Com a câmera</small>
+                   <input type="file" id="project-camera" accept="image/*" capture="environment" hidden>
+                 </label>
+                 <label class="save-tile upload-tile">
+                   <span class="save-icon">${icon.upload}</span><strong>Escolher arquivos</strong><small>Fotos, vídeos, PDF…</small>
+                   <input type="file" id="project-files" accept="${CHAT_ACCEPT}" multiple hidden>
+                 </label>
+               </div>
+               <div class="upload-progress" id="upload-progress" hidden>
+                 <span class="spinner" aria-hidden="true"></span>
+                 <span><strong id="project-status" aria-live="polite">Enviando…</strong><small id="upload-name"></small></span>
+                 <span class="progress"><span id="upload-bar" style="width:0%"></span></span>
+               </div>
+               <p class="hint">Até 25 MB cada. Dá para escolher vários de uma vez.</p>`
             : ''
         }
       </section>
@@ -5974,7 +6081,7 @@ function drawProject(id, data, urls = {}) {
     b.onclick = () => {
       const f = data.files.find((x) => x.id === b.dataset.viewFile);
       const url = f && (urls[f.path] || knownGallery([f.path], 'projetos')[f.path]);
-      if (url) openMediaViewer({ url, type: f.file_type, name: f.file_name });
+      if (url) openFileViewer({ url, type: f.file_type, name: f.file_name, size: f.file_size });
     };
   });
   $view.querySelectorAll('[data-del-file]').forEach(
@@ -5989,15 +6096,23 @@ function drawProject(id, data, urls = {}) {
         save();
       }),
   );
-  document.getElementById('project-files')?.addEventListener('change', async (e) => {
+  const onFiles = async (e) => {
     const files = [...e.target.files];
     e.target.value = '';
     if (!files.length) return;
     const status = document.getElementById('project-status');
+    const zone = document.getElementById('upload-zone');
+    const progress = document.getElementById('upload-progress');
+    const bar = document.getElementById('upload-bar');
+    const fileName = document.getElementById('upload-name');
+    zone?.classList.add('busy');
+    if (progress) progress.hidden = false;
     let sent = 0;
     let stop = null;
     for (const [i, file] of files.entries()) {
       if (status) status.textContent = `Enviando ${i + 1} de ${files.length}…`;
+      if (fileName) fileName.textContent = file.name;
+      if (bar) bar.style.width = `${Math.round((i / files.length) * 100)}%`;
       try {
         data.files.push(await uploadProjectFile(id, file));
         sent++;
@@ -6006,11 +6121,16 @@ function drawProject(id, data, urls = {}) {
         if (/espaço/.test(stop)) break;
       }
     }
+    if (bar) bar.style.width = '100%';
     await galleryUrls(projectFiles(data), 'projetos').catch(() => {});
+    zone?.classList.remove('busy');
+    if (progress) progress.hidden = true;
     if (location.hash === `#/projetos/${id}`) save();
     if (stop) toast(sent ? `${sent} ${sent === 1 ? 'arquivo enviado' : 'arquivos enviados'}. ${stop}` : stop, 'error');
     else toast(`${sent} ${sent === 1 ? 'arquivo enviado' : 'arquivos enviados'}.`);
-  });
+  };
+  document.getElementById('project-files')?.addEventListener('change', onFiles);
+  document.getElementById('project-camera')?.addEventListener('change', onFiles);
   $view.querySelectorAll('[data-del-comment]').forEach(
     (b) =>
       (b.onclick = async () => {
@@ -6247,7 +6367,7 @@ function drawYearCalendar(k, urls) {
         pdf
           ? `<div class="card center">
               <p>${icon.file} O calendário está em PDF (${esc(fmtBytes(k.file_size))}).</p>
-              ${url ? `<a class="btn primary big" href="${esc(url)}" target="_blank" rel="noopener">Abrir o calendário</a>` : '<p class="hint">Carregando…</p>'}
+              ${url ? `<button type="button" class="btn primary big" id="cal-open-pdf">Abrir o calendário</button>` : '<p class="hint">Carregando…</p>'}
             </div>`
           : `<div class="zoom-box" id="zoom-box">
               ${url ? `<img id="zoom-img" src="${esc(url)}" alt="${esc(`${k.title} ${k.year}`)}" draggable="false">` : '<span class="thumb-wait" aria-hidden="true"></span>'}
@@ -6273,6 +6393,9 @@ function drawYearCalendar(k, urls) {
           : ''
       }
     </div>`;
+  document.getElementById('cal-open-pdf')?.addEventListener('click', () =>
+    openFileViewer({ url, type: k.file_type, name: `${k.title} ${k.year}.pdf`, size: k.file_size }),
+  );
   if (!pdf && url) bindZoom(document.getElementById('zoom-box'), document.getElementById('zoom-img'));
 
   const fileOf = async () => {

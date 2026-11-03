@@ -15,6 +15,29 @@ const tag = `ProjUI ${Date.now().toString(36)}`;
 const title = `${tag} Feira de ciências`;
 const returning = (h) => ({ ...h, Prefer: 'return=representation' });
 
+// Um PDF pequeno de verdade (uma página com um texto), para o leitor de PDF do app.
+function tinyPdf() {
+  const objs = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+    null,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  const text = 'BT /F1 24 Tf 40 100 Td (Roteiro da feira) Tj ET';
+  objs[3] = `<< /Length ${text.length} >>\nstream\n${text}\nendstream`;
+  let out = '%PDF-1.4\n';
+  const offsets = [];
+  objs.forEach((o, i) => {
+    offsets.push(out.length);
+    out += `${i + 1} 0 obj\n${o}\nendobj\n`;
+  });
+  const xref = out.length;
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('')}`;
+  out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(out, 'latin1');
+}
+
 test.beforeAll(async ({ playwright }) => {
   test.skip(!configured, 'Falta a chave pública em js/config.js');
   if (!testPassword()) {
@@ -61,7 +84,26 @@ test('a liderança cria o projeto da sala, com etapa e arquivo', async ({ page }
 
   await page.locator('#project-files').setInputFiles({ name: 'roteiro.txt', mimeType: 'text/plain', buffer: Buffer.from('Roteiro da feira') });
   await expect(page.getByText('1 arquivo enviado.')).toBeVisible({ timeout: 15000 });
-  await expect(page.locator('.project-file a.msg-doc')).toContainText('roteiro.txt');
+  await expect(page.locator('.project-file .msg-doc')).toContainText('roteiro.txt');
+  // Adicionar: câmera e arquivos.
+  await expect(page.locator('.upload-zone')).toContainText('Tirar foto');
+  await expect(page.locator('.upload-zone')).toContainText('Escolher arquivos');
+  // Documento que o app não mostra: tela com Abrir no celular e Voltar.
+  await page.locator('.project-file .msg-doc').filter({ hasText: 'roteiro.txt' }).click();
+  const docView = page.getByRole('dialog', { name: 'roteiro.txt' });
+  await expect(docView.getByRole('link', { name: /Abrir no celular/ })).toBeVisible();
+  await docView.getByRole('button', { name: 'Voltar' }).click();
+  await expect(docView).toHaveCount(0);
+  // PDF: abre dentro do app, com as páginas desenhadas; o voltar do celular fecha.
+  await page.locator('#project-files').setInputFiles({ name: 'cronograma.pdf', mimeType: 'application/pdf', buffer: tinyPdf() });
+  const pdfRow = page.locator('.project-file .msg-doc').filter({ hasText: 'cronograma.pdf' });
+  await expect(pdfRow).toContainText('Ver', { timeout: 20000 });
+  await pdfRow.click();
+  const pdfView = page.getByRole('dialog', { name: 'cronograma.pdf' });
+  await expect(pdfView.getByRole('img', { name: 'Página 1 de 1' })).toBeVisible({ timeout: 20000 });
+  await page.goBack();
+  await expect(pdfView).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
   // Bloco "Gerenciar projeto" (no modelo da agenda).
   await expect(page.getByRole('heading', { name: 'Gerenciar projeto' })).toBeVisible();
 

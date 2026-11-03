@@ -191,6 +191,12 @@ test('a liderança cria o grupo, escolhe quem participa e escreve com emoji, lin
   await page.locator('#chat-file').setInputFiles({ name: 'lista.txt', mimeType: 'text/plain', buffer: Buffer.from('Material da semana') });
   await expect(page.locator('.msg.mine').last().locator('.msg-doc')).toContainText('lista.txt');
   await expect(page.locator('.msg.mine').last().locator('a.msg-doc')).toBeVisible({ timeout: 15000 });
+  // Tocar no documento abre dentro do app, com Voltar (e não numa aba do navegador).
+  await page.locator('.msg.mine').last().locator('a.msg-doc').click();
+  const docView = page.getByRole('dialog', { name: 'lista.txt' });
+  await expect(docView.getByRole('link', { name: /Abrir no celular/ })).toBeVisible();
+  await docView.getByRole('button', { name: 'Voltar' }).click();
+  await expect(docView).toHaveCount(0);
 
   // O administrador troca o ícone do grupo: aparece nos dados do grupo, na conversa e na lista.
   const shot = await page.screenshot();
