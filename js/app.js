@@ -907,6 +907,8 @@ async function render() {
   const [path, qs] = raw.split('?');
   const ctx = { params: new URLSearchParams(qs || ''), path, alive: () => id === renderId };
   renderTabbar(path);
+  // Dentro de uma conversa: sem a barra do app no alto; o cabeçalho do grupo fica preso no topo.
+  document.body.classList.toggle('in-chat-room', /^\/chat\/[0-9a-f-]{36}$/.test(path));
   // Saiu da conversa: para de receber as mensagens na hora.
   if (chatLive && !path.startsWith(`/chat/${chatLive.group}`)) chatClose();
   document.getElementById('notif-link').classList.toggle('active', path === '/notificacoes');
@@ -4424,6 +4426,21 @@ const CHAT_TYPES = /^(image\/(jpeg|png|webp|gif|heic|heif)|video\/(mp4|quicktime
 const CHAT_ACCEPT = 'image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip';
 const canCreateGroups = () => featureOn('chat') && isLeaderRole(myRole());
 let chatLive = null; // conversa aberta recebendo as mensagens na hora: { group, channel }
+
+// Teclado do celular: ele cobre o pé da tela e o navegador empurra a página para mostrar o campo.
+// --vv-top (quanto a parte visível desceu) prende o cabeçalho da conversa no alto do que se vê;
+// --kb (quanto o teclado ocupa) põe o campo de escrever logo acima do teclado.
+function syncVisualViewport() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const root = document.documentElement.style;
+  const kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+  root.setProperty('--vv-top', `${Math.max(0, Math.round(vv.offsetTop))}px`);
+  root.setProperty('--kb', `${kb}px`);
+  document.body.classList.toggle('keyboard-open', kb > 80);
+}
+window.visualViewport?.addEventListener('resize', syncVisualViewport);
+window.visualViewport?.addEventListener('scroll', syncVisualViewport);
 
 function chatClose() {
   if (!chatLive) return;

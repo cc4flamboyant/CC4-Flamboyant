@@ -286,6 +286,28 @@ test('as fotos do chat ficam guardadas no aparelho (aparecem na hora da próxima
   await ctx.close();
 });
 
+test('dentro da conversa: sem a barra do app; o voltar e o nome do grupo ficam presos no alto', async ({ page }) => {
+  const g = await group();
+  await openLoggedIn(page, as['lider-a'].session, `/i/teste-a/#/chat/${g.id}`);
+  await expect(page.locator('#chat-name')).toHaveText(name);
+  // A barra do app (logo, tema, sininho) some dentro da conversa.
+  await expect(page.locator('.topbar')).toBeHidden();
+  const head = page.locator('.chat-head');
+  await expect(head).toHaveCSS('position', 'fixed');
+  const atTop = async () => (await head.boundingBox()).y;
+  expect(await atTop()).toBeLessThan(2);
+  // Rolando a conversa e tocando no campo de escrever, o cabeçalho continua no alto.
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  expect(await atTop()).toBeLessThan(2);
+  await page.getByRole('textbox', { name: 'Mensagem' }).click();
+  expect(await atTop()).toBeLessThan(2);
+  await expect(page.getByRole('link', { name: 'Voltar para o chat' })).toBeVisible();
+  // Saindo da conversa, a barra do app volta.
+  await page.getByRole('link', { name: 'Voltar para o chat' }).click();
+  await expect(page.getByRole('heading', { name: 'Chat', level: 1 })).toBeVisible();
+  await expect(page.locator('.topbar')).toBeVisible();
+});
+
 test('o chat abre na hora, sem esperar o banco', async ({ page }) => {
   await openLoggedIn(page, as['lider-a'].session, '/i/teste-a/#/');
   await page.waitForLoadState('networkidle');

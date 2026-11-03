@@ -1167,6 +1167,20 @@ body.totem-full #tabbar, body.totem-full .topbar { visibility: hidden; }
 .chat-compose-slot { position: fixed; left: 0; right: 0; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom)); z-index: 9;
   padding: 8px max(12px, calc((100% - 640px) / 2 + 12px)); background: var(--bg); border-top: 1px solid var(--line); }
 body:not(.has-tabbar) .chat-compose-slot { bottom: env(safe-area-inset-bottom); }
+
+/* Dentro da conversa: sem a barra do app (logo, tema, sininho); o voltar e o nome do grupo ficam
+   presos no alto, inclusive com o teclado aberto (o js/app.js acompanha a parte visível da tela). */
+body.in-chat-room .topbar { display: none; }
+body.in-chat-room .chat-room { padding-top: calc(60px + env(safe-area-inset-top)); }
+body.in-chat-room .chat-head {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 11; margin: 0;
+  padding: calc(8px + env(safe-area-inset-top)) max(12px, calc((100% - 640px) / 2 + 12px)) 8px;
+  transform: translateY(var(--vv-top, 0px));
+  box-shadow: 0 1px 0 var(--line);
+}
+/* Teclado aberto: o campo fica logo acima dele e o menu de baixo sai do caminho. */
+body.in-chat-room.keyboard-open .chat-compose-slot { bottom: var(--kb, 0px); }
+body.in-chat-room.keyboard-open .tabbar { display: none; }
 .chat-compose .hint:empty { display: none; }
 .chat-compose .hint { margin: 0 0 6px; }
 .chat-bar { display: flex; align-items: flex-end; gap: 6px; }
