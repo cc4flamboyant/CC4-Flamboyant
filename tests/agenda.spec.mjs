@@ -60,6 +60,10 @@ test('a líder cria um evento semanal e o membro vê na agenda, com "adicionar �
   const file = await download;
   expect(file.suggestedFilename()).toMatch(/^evento-\d{4}-\d{2}-\d{2}\.ics$/);
   await expect(member.getByRole('link', { name: 'Google Agenda' })).toHaveAttribute('href', /calendar\.google\.com/);
+  await expect(member.getByRole('heading', { name: 'Salvar na sua agenda' })).toBeVisible();
+  // O membro não gerencia o evento.
+  await expect(member.getByRole('heading', { name: 'Gerenciar evento' })).toHaveCount(0);
+  await expect(member.getByRole('button', { name: /Excluir evento/ })).toHaveCount(0);
   await member.context().close();
 });
 
@@ -160,18 +164,24 @@ test('o membro reage ao aviso com emoji, troca e tira, e a reação fica gravada
   await page.reload();
   await page.waitForLoadState('networkidle');
   await expect(card.locator('.reaction.mine')).toHaveText('🎉1');
-  // Trocar de emoji.
+  // Trocar de emoji: 🙏 (mãos juntas).
   await card.getByRole('button', { name: 'Reagir com emoji' }).click();
-  await Promise.all([saved(), card.getByRole('button', { name: 'Reagir com 👍' }).click()]);
-  await expect(card.locator('.reaction.mine')).toHaveText('👍1');
+  await Promise.all([saved(), card.getByRole('button', { name: 'Reagir com 🙏' }).click()]);
+  await expect(card.locator('.reaction.mine')).toHaveText('🙏1');
   await expect(card.locator('.reaction', { hasText: '🎉' })).toHaveCount(0);
-  // Tocar no emoji mostra quem reagiu (a própria pessoa aparece como "Você"); dali tira a reação.
+  // Tocar no emoji mostra quem reagiu, na hora (mesmo com o banco demorando: primeiro as
+  // contagens, depois os nomes, com a própria pessoa como "Você"); dali tira a reação.
+  await page.route('**/rpc/announcement_reaction_people', async (route) => {
+    await new Promise((r) => setTimeout(r, 3000));
+    await route.continue().catch(() => {});
+  });
   await card.locator('.reaction.mine').click();
   const who = page.getByRole('dialog');
-  await expect(who.getByRole('heading', { name: 'Reações · 1 pessoa' })).toBeVisible();
-  await expect(who.locator('.who-list li')).toContainText('👍');
+  await expect(who.getByRole('heading', { name: 'Reações · 1 pessoa' })).toBeVisible({ timeout: 1000 });
+  await expect(who.locator('.who-list li')).toContainText('🙏', { timeout: 1000 });
   await expect(who.locator('.who-list li')).toContainText('Você');
-  await Promise.all([saved(), who.getByRole('button', { name: 'Tirar minha reação 👍' }).click()]);
+  await page.unroute('**/rpc/announcement_reaction_people');
+  await Promise.all([saved(), who.getByRole('button', { name: 'Tirar minha reação 🙏' }).click()]);
   await expect(card.locator('.reaction.mine')).toHaveCount(0);
   await page.reload();
   await page.waitForLoadState('networkidle');

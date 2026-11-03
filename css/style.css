@@ -227,6 +227,27 @@ legend { font-weight: 700; padding: 0 4px; }
 .church-row > svg:last-child, .menu-row > svg:last-child { color: var(--muted); }
 .menu-row > svg:first-child { color: var(--link); width: 22px; height: 22px; }
 .platform-church { display: flex; flex-direction: column; gap: 6px; }
+/* Evento: salvar na agenda (dois botões grandes) e, para a liderança, gerenciar. */
+.event-save h2, .event-manage h2 { font-size: 1rem; margin: 0 0 12px; }
+.save-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.save-tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 112px;
+  padding: 14px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg);
+  color: var(--ink); font: inherit; text-align: center; text-decoration: none; cursor: pointer;
+  transition: border-color .15s, background .15s, transform .1s;
+}
+.save-tile:hover { border-color: var(--brand); }
+.save-tile:active { transform: scale(.98); }
+.save-tile:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.save-tile strong { font-size: .95rem; line-height: 1.2; }
+.save-tile small { color: var(--muted); font-size: .8rem; }
+.save-icon { display: grid; place-items: center; width: 44px; height: 44px; margin-bottom: 4px; border-radius: 50%; background: var(--brand-soft); color: var(--link); }
+.save-icon svg { width: 24px; height: 24px; }
+.event-save .hint { margin: 10px 0 0; }
+.event-manage { display: flex; flex-direction: column; gap: 8px; }
+.event-manage .menu-row small { color: var(--muted); font-weight: 400; font-size: .8rem; }
+.menu-row.danger-row, .menu-row.danger-row > svg:first-child { color: var(--danger); }
+.menu-row.danger-row { border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); }
 .platform-church.inactive .church-row { opacity: .6; }
 .row-actions { display: flex; gap: 8px; flex-wrap: wrap; padding-left: 4px; }
 

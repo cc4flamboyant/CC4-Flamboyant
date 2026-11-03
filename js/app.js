@@ -65,7 +65,7 @@ const screenMem = new Map();
 const screenLoading = new Map();
 // Telas com dados sensíveis de outras pessoas: guardadas só na memória, nunca gravadas no aparelho.
 // As conversas do chat também: ficam só na memória.
-const PRIVATE_SCREENS = /^(sala:|salas$|criancas$|chat($|:))/;
+const PRIVATE_SCREENS = /^(sala:|salas$|criancas$|chat($|:)|reacoes:)/;
 const screenKey = (name) => `${SCREEN_PREFIX}${state.user?.id}:${state.church?.id}:${name}`;
 
 function screenCached(name) {
@@ -415,23 +415,35 @@ function actionMenu(title, items, { emojis = null, current = null } = {}) {
   });
 }
 
-// Quem reagiu: people = [{emoji, name, mine}], com o emoji tocado (focus) primeiro.
-// Devolve "react" (reagir com o focus), "remove" (tirar a própria reação) ou null.
-function reactionPeople(people, focus) {
-  const list = [...people].sort((a, b) => (b.emoji === focus) - (a.emoji === focus) || b.mine - a.mine);
-  const mine = people.find((x) => x.mine)?.emoji || null;
+// Quem reagiu, com o emoji tocado (focus) primeiro. Abre na hora: com people ([{emoji, name, mine}])
+// já conhecido, ou com as contagens (counts = {emoji: n}) enquanto load() busca os nomes.
+// mine: a reação da própria pessoa. Devolve "react" (reagir com o focus), "remove" (tirar a sua) ou null.
+function reactionPeople(focus, { people = null, mine = null, counts = {}, load = null } = {}) {
+  const sortBy = (a, b) => (b.emoji === focus) - (a.emoji === focus) || b.mine - a.mine;
+  const listHtml = (list) =>
+    list.length
+      ? `<ul class="who-list">${[...list]
+          .sort(sortBy)
+          .map((x) => `<li><span class="who-emoji" aria-hidden="true">${x.emoji}</span><span class="who-name">${esc(x.name)}</span>${x.mine ? '<small>Você</small>' : ''}</li>`)
+          .join('')}</ul>`
+      : '<p>Ninguém reagiu ainda.</p>';
+  // Sem os nomes ainda: uma linha por emoji com quantas pessoas.
+  const countsHtml = () => {
+    const rows = Object.entries(counts).filter(([, n]) => n > 0).sort(([a], [b]) => (b === focus) - (a === focus));
+    return rows.length
+      ? `<ul class="who-list loading">${rows
+          .map(([e, n]) => `<li><span class="who-emoji" aria-hidden="true">${e}</span><span class="who-name">${n} ${n === 1 ? 'pessoa' : 'pessoas'}</span>${e === mine ? '<small>com você</small>' : ''}</li>`)
+          .join('')}</ul><p class="hint" aria-live="polite">Carregando os nomes…</p>`
+      : '<p>Ninguém reagiu ainda.</p>';
+  };
+  const total = (list) => (list ? list.length : Object.values(counts).reduce((t, n) => t + n, 0));
+  const title = (n) => `Reações · ${n} ${n === 1 ? 'pessoa' : 'pessoas'}`;
   const dlg = document.createElement('dialog');
   dlg.className = 'ask action-menu reaction-people';
   dlg.innerHTML = `
     <form method="dialog">
-      <h2>Reações · ${list.length} ${list.length === 1 ? 'pessoa' : 'pessoas'}</h2>
-      ${
-        list.length
-          ? `<ul class="who-list">${list
-              .map((x) => `<li><span class="who-emoji" aria-hidden="true">${x.emoji}</span><span class="who-name">${esc(x.name)}</span>${x.mine ? '<small>Você</small>' : ''}</li>`)
-              .join('')}</ul>`
-          : '<p>Ninguém reagiu ainda.</p>'
-      }
+      <h2>${title(total(people))}</h2>
+      <div class="who-body">${people ? listHtml(people) : countsHtml()}</div>
       <div class="action-list">
         ${mine ? `<button class="btn danger-outline" value="remove">Tirar minha reação ${mine}</button>` : ''}
         ${focus && mine !== focus ? `<button class="btn" value="react">Reagir com ${focus}</button>` : ''}
@@ -448,6 +460,17 @@ function reactionPeople(people, focus) {
     dlg.addEventListener('click', (e) => e.target === dlg && dlg.close('cancel'));
     dlg.showModal();
     dlg.querySelector('[value="cancel"]').focus();
+    // Os nomes chegam do banco: troca na janela, se ela ainda estiver aberta.
+    load?.()
+      .then((list) => {
+        if (!dlg.open) return;
+        dlg.querySelector('h2').textContent = title(list.length);
+        dlg.querySelector('.who-body').innerHTML = listHtml(list);
+      })
+      .catch(() => {
+        const hint = dlg.querySelector('.who-body .hint');
+        if (hint) hint.textContent = 'Não deu para carregar os nomes agora.';
+      });
   });
 }
 
@@ -549,6 +572,8 @@ const icon = {
   expand: '<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
   users: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.3a6.5 6.5 0 0 1 3.5 5.7"/></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  pencil: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></svg>',
+  external: '<svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
   trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>',
   qr: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2M20 14v.01M14 20h.01M17 17v3h3M20 17v.01"/></svg>',
   upload: '<svg viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 16v4h16v-4"/></svg>',
@@ -3111,17 +3136,29 @@ function drawEvent(ctx, ev) {
       ${ev.repeat_weekly ? `<p class="hint">Repete toda semana${ev.repeat_until ? ` até ${esc(fmtDate(ev.repeat_until))}` : ''}.</p>` : ''}
       ${ev.description ? `<div class="card"><p class="pre">${esc(ev.description)}</p></div>` : ''}
       ${ev.remind_minutes ? `<p class="hint">${icon.bell} Lembrete por notificação ${esc(remind.toLowerCase())}.</p>` : ''}
-      <div class="actions-row">
-        <button class="btn primary" id="ics">${icon.calendar} Adicionar à agenda</button>
-        <a class="btn" href="${esc(googleCalendarUrl(ev, calOpts))}" target="_blank" rel="noopener">Google Agenda</a>
-      </div>
-      ${ev.repeat_weekly ? '<p class="hint">Na sua agenda, entra a série inteira (toda semana).</p>' : ''}
+      <section class="card event-save">
+        <h2>Salvar na sua agenda</h2>
+        <div class="save-tiles">
+          <button type="button" class="save-tile" id="ics">
+            <span class="save-icon">${icon.calendar}</span>
+            <strong>Adicionar à agenda</strong>
+            <small>Agenda do celular</small>
+          </button>
+          <a class="save-tile" href="${esc(googleCalendarUrl(ev, calOpts))}" target="_blank" rel="noopener">
+            <span class="save-icon">${icon.external}</span>
+            <strong>Google Agenda</strong>
+            <small>Abre no Google</small>
+          </a>
+        </div>
+        ${ev.repeat_weekly ? '<p class="hint">Entra a série inteira (toda semana).</p>' : ''}
+      </section>
       ${
         leader
-          ? `<div class="actions-row">
-              <a class="btn" href="#/agenda/${ev.id}/editar">Editar</a>
-              <button class="btn danger-outline" id="delete">Excluir</button>
-            </div>`
+          ? `<section class="card event-manage" aria-label="Gerenciar evento">
+              <h2>Gerenciar evento</h2>
+              <a class="menu-row" href="#/agenda/${ev.id}/editar">${icon.pencil}<span>Editar evento<small>Título, data, local e lembrete</small></span>${icon.chevron}</a>
+              <button type="button" class="menu-row danger-row" id="delete">${icon.trash}<span>Excluir evento<small>${ev.repeat_weekly ? 'Com todas as repetições' : 'Some da agenda de todos'}</small></span></button>
+            </section>`
           : ''
       }
     </div>`;
@@ -3392,9 +3429,14 @@ function wireAnnouncements(all, box, fill) {
       let next = a.mine === emoji ? null : emoji;
       // Emoji que já está no aviso: mostra quem reagiu (e dali dá para reagir ou tirar a sua).
       if (!btn.closest('.reaction-picker')) {
-        const { data: people, error } = await sb.rpc('announcement_reaction_people', { p_announcement: a.id });
-        if (error) return toast(errorText(error), 'error');
-        const choice = await reactionPeople(people, emoji);
+        const key = `reacoes:${a.id}`;
+        const load = async () => {
+          const { data, error } = await sb.rpc('announcement_reaction_people', { p_announcement: a.id });
+          if (error) throw error;
+          screenUpdate(key, data);
+          return data;
+        };
+        const choice = await reactionPeople(emoji, { people: screenCached(key), mine: a.mine, counts: a.reactions, load });
         if (!choice || !box.isConnected) return;
         next = choice === 'remove' ? null : emoji;
       }
@@ -4587,7 +4629,7 @@ async function chatWhoReacted(id, msgId, focus) {
   const people = (data.reactions || [])
     .filter((r) => r.message_id === msgId)
     .map((r) => ({ emoji: r.emoji, name: names.get(r.member_id) || 'Ex-participante', mine: !!me && r.member_id === me.member_id }));
-  const choice = await reactionPeople(people, focus);
+  const choice = await reactionPeople(focus, { people, mine: people.find((x) => x.mine)?.emoji || null });
   if (choice) chatReact(id, msgId, choice === 'remove' ? null : focus);
 }
 

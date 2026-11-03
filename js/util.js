@@ -277,7 +277,7 @@ export const SPECIAL_FIELDS = ['nome', 'primeiro_nome', 'instituicao', 'anos'];
 export const yearsText = (n) => (n == null || n === '' ? '' : Number(n) === 1 ? '1 ano' : `${n} anos`);
 
 // Reações nos avisos (as mesmas do banco: supabase/019_reacoes_nos_avisos.sql).
-export const REACTIONS = ['👍', '❤️', '🎉', '😂', '😮', '😢'];
+export const REACTIONS = ['👍', '❤️', '🙏', '🎉', '😂', '😮', '😢']; // o banco confere (029)
 
 // Emojis do botão do chat.
 export const CHAT_EMOJIS = [

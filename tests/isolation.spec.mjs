@@ -1123,8 +1123,10 @@ test.describe('Quem reagiu e reações no chat (027)', () => {
     // Só um por pessoa: trocar substitui.
     expect((await react('membro-a', '😂')).ok()).toBe(true);
     expect((await list('lider-a')).map((r) => r.emoji).sort()).toEqual(['👍', '😂']);
-    // Emoji fora da lista: recusa.
+    // Emoji fora da lista: recusa. 🙏 (029): aceita.
     expect((await react('lider-a', '💩')).ok()).toBe(false);
+    expect((await react('lider-a', '🙏')).ok()).toBe(true);
+    expect((await react('lider-a', '👍')).ok()).toBe(true);
     // De fora do grupo / da instituição: não reage nem lê.
     for (const who of ['adm-b', 'sem-igreja']) {
       expect((await react(who, '👍')).ok(), who).toBe(false);
