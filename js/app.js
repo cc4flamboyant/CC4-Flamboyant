@@ -3151,10 +3151,22 @@ async function viewAgenda(ctx) {
   if (!requireMemberFeature('/agenda', 'agenda')) return;
   // As entregas dos projetos vêm dos projetos guardados (o Início já busca); conferidos em segundo plano.
   const projects = () => (projectsOn() ? screenCached('projetos') : null);
+  // Aniversários (membros e crianças) dos próximos 60 dias, guardados junto com o dia de hoje.
+  const today = isoLocal(agendaStart());
+  const bdays = () => (datesOn() && screenCached('agenda-aniv')?.day === today ? screenCached('agenda-aniv').rows : []);
   const draw = (all) => {
-    drawAgenda(all, projects());
+    drawAgenda(all, projects(), bdays());
     fillCalendarBar();
   };
+  if (datesOn()) {
+    const before = JSON.stringify(bdays());
+    screenFetch('agenda-aniv', async () => ({ day: today, rows: await fetchBirthdays(today, isoLocal(addDays(agendaStart(), 60))) }))
+      .then(() => {
+        const all = screenCached('agenda');
+        if (ctx.alive() && all && JSON.stringify(bdays()) !== before) draw(all);
+      })
+      .catch(() => {});
+  }
   if (projectsOn()) {
     const before = JSON.stringify(screenCached('projetos'));
     screenFetch('projetos', loadProjects)
@@ -3182,7 +3194,16 @@ function deliveryCard(p) {
     </a>`;
 }
 
-function drawAgenda(all, projects) {
+// Aniversário na lista da Agenda: o dia todo, antes dos eventos (como no modo mês e dia).
+function birthdayCard(b) {
+  return `
+    <div class="event-card birthday-row">
+      <span class="event-time" aria-hidden="true">🎂</span>
+      <span><strong>${esc(b.name)}</strong><small>Aniversário${celebrationNote(b, ' · ')}</small></span>
+    </div>`;
+}
+
+function drawAgenda(all, projects, birthdays = []) {
   // O guardado pode ser de outro dia: tira o que já terminou.
   const now = Date.now();
   const rows = all.filter((ev) => new Date(ev.ends_at || new Date(ev.starts_at).getTime() + 2 * 3600e3).getTime() > now);
@@ -3193,7 +3214,8 @@ function drawAgenda(all, projects) {
     if (!byDay.has(day)) byDay.set(day, []);
     byDay.get(day).push(html);
   };
-  // As entregas valem o dia todo: vêm antes dos eventos do dia.
+  // Aniversários e entregas valem o dia todo: vêm antes dos eventos do dia.
+  for (const b of birthdays.filter((x) => x.kind === 'aniversario' && x.on_date >= today)) add(b.on_date, birthdayCard(b));
   for (const p of deliveries) add(p.due_on, deliveryCard(p));
   for (const ev of rows) add(isoLocal(new Date(ev.starts_at)), eventCard(ev));
   const days = [...byDay].sort(([a], [b]) => a.localeCompare(b));

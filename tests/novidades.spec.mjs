@@ -194,6 +194,12 @@ test('Início: o aniversário do filho aparece no cartão da semana (033)', asyn
   await expect(item).toBeVisible({ timeout: 15000 });
   await expect(item).toContainText('Hoje');
   await expect(item).toContainText(`faz ${now.getFullYear() - 2018} anos`);
+  // Na Agenda, modo lista, também (no dia, antes dos eventos).
+  await page.goto('/i/teste-a/#/agenda');
+  const row = page.locator('.agenda-day', { hasText: 'Hoje' }).locator('.birthday-row', { hasText: kidName });
+  await expect(row).toBeVisible({ timeout: 15000 });
+  await expect(row).toContainText('Aniversário');
+  await expect(row).toContainText(`faz ${now.getFullYear() - 2018} anos`);
 });
 
 test('oração: o membro pede para todos; a direção aprova; vai para o mural com "Vou orar"', async ({ page, browser }) => {
