@@ -1160,6 +1160,28 @@ test.describe('Pedidos de oração, ordem das salas e do chat (032)', () => {
   });
 });
 
+test.describe('Ícone do grupo no Início (035)', () => {
+  test('o banco só aceita ícones da lista', async () => {
+    const made = await rpc('lider-a', 'chat_create_group', { p_church: church.a, p_name: `Ícone ${Date.now()}`, p_description: null, p_locked: false, p_members: [] });
+    expect(made.ok(), await made.text()).toBe(true);
+    const id = await made.json();
+    try {
+      const set = (v) => api.patch(rest(`chat_groups?id=eq.${id}`), { headers: returning(as['lider-a'].headers), data: { home_icon: v } });
+      expect((await set('<svg onload=alert(1)>')).ok()).toBe(false);
+      expect((await set('trash')).ok()).toBe(false);
+      const ok = await set('heart');
+      expect(ok.ok(), await ok.text()).toBe(true);
+      expect((await ok.json())[0].home_icon).toBe('heart');
+      // Quem não administra o grupo não muda (nenhuma linha muda).
+      const other = await api.patch(rest(`chat_groups?id=eq.${id}`), { headers: returning(as['membro-a'].headers), data: { home_icon: 'sun' } });
+      expect(other.ok() ? await other.json() : []).toEqual([]);
+      expect((await set(null)).ok()).toBe(true);
+    } finally {
+      await api.delete(rest(`chat_groups?id=eq.${id}`), { headers: as['lider-a'].headers });
+    }
+  });
+});
+
 test.describe('Ordem dos atalhos do Início (034)', () => {
   test.afterAll(async () => {
     await api.patch(rest(`churches?id=eq.${church.a}`), { headers: as['adm-a'].headers, data: { home_order: null } });

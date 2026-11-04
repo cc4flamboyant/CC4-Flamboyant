@@ -330,6 +330,19 @@ legend { font-weight: 700; padding: 0 4px; }
 }
 .shortcuts .shortcut.sorting { z-index: 3; pointer-events: none; border-style: solid; box-shadow: 0 14px 30px rgb(0 0 0 / .22); }
 .shortcuts .shortcut.settling { z-index: 3; }
+/* Ícone do atalho do grupo (Editar grupo). */
+.icon-choice { border: 0; padding: 0; margin: 0; min-width: 0; }
+.icon-choice legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
+.icon-choice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 8px; }
+.icon-choice-grid label {
+  display: grid; place-items: center; height: 48px; margin: 0; border: 1.5px solid var(--line); border-radius: 12px;
+  background: var(--surface); color: var(--muted); cursor: pointer; transition: border-color .15s, background .15s, color .15s, transform .15s;
+}
+.icon-choice-grid label:active { transform: scale(.94); }
+.icon-choice-grid input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.icon-choice-grid svg { width: 24px; height: 24px; }
+.icon-choice-grid label:has(input:checked) { border-color: var(--brand); background: var(--brand-soft); color: var(--link); }
+.icon-choice-grid label:has(input:focus-visible) { outline: 2px solid var(--brand); outline-offset: 2px; }
 .organize-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin: -6px 0 16px; }
 .organize-bar .hint { flex: 1 1 200px; margin: 0; }
 .shortcut.soon { opacity: .75; }

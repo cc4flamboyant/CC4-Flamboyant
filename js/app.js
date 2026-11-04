@@ -1227,6 +1227,15 @@ function bindHeroLogo(c) {
   );
 }
 
+// Ícones que o atalho de um grupo do chat pode ter no Início (035; a mesma lista do banco).
+const HOME_ICONS = [
+  ['chat', 'Conversa'], ['users', 'Pessoas'], ['megaphone', 'Recado'], ['bell', 'Sino'],
+  ['calendar', 'Calendário'], ['clipboard', 'Prancheta'], ['book', 'Livro'], ['project', 'Ideia'],
+  ['child', 'Criança'], ['heart', 'Coração'], ['cake', 'Bolo'], ['image', 'Foto'],
+  ['camera', 'Câmera'], ['chart', 'Gráfico'], ['pin', 'Lugar'], ['sun', 'Sol'],
+];
+const homeIcon = (key) => (HOME_ICONS.some(([k]) => k === key) ? icon[key] : icon.chat);
+
 // Grupos do chat marcados "Mostrar no Início" (032): um atalho com o nome do grupo, só para quem
 // está no grupo. Desenha com a lista guardada e confere com o banco.
 function homeChatTiles() {
@@ -1239,7 +1248,7 @@ function homeChatTiles() {
     for (const g of (groups || []).filter((x) => x.show_on_home)) {
       box.insertAdjacentHTML(
         'beforeend',
-        `<a class="shortcut" data-chat-tile data-key="chat:${g.id}" href="#/chat/${g.id}">${icon.chat}<span>${esc(g.name)}</span>${g.unread ? `<b class="tile-badge" aria-label="${g.unread} não lidas">${g.unread > 99 ? '99+' : g.unread}</b>` : ''}</a>`,
+        `<a class="shortcut" data-chat-tile data-key="chat:${g.id}" href="#/chat/${g.id}">${homeIcon(g.home_icon)}<span>${esc(g.name)}</span>${g.unread ? `<b class="tile-badge" aria-label="${g.unread} não lidas">${g.unread > 99 ? '99+' : g.unread}</b>` : ''}</a>`,
       );
     }
     orderHomeTiles(box);
@@ -1394,6 +1403,12 @@ function bindHomeOrganize(c) {
       if (error) toast('Não deu para salvar a ordem. Tente de novo.', 'error');
     });
   });
+}
+
+// O ícone escolhido no "Editar grupo" ("chat" é o padrão: guarda vazio).
+function homeIconValue(f) {
+  const v = f.querySelector('[name="home_icon"]:checked')?.value;
+  return v && v !== 'chat' ? v : null;
 }
 
 async function viewChurchHome() {
@@ -4875,7 +4890,7 @@ function sortable(list, onDrop) {
 // Conversa: o grupo, os participantes e as últimas mensagens (as mais antigas por último na busca).
 async function loadChatRoom(id) {
   const [g, people, msgs, reacts] = await Promise.all([
-    sb.from('chat_groups').select('id, name, description, locked, icon_path, show_on_home').eq('id', id).maybeSingle(),
+    sb.from('chat_groups').select('id, name, description, locked, icon_path, show_on_home, home_icon').eq('id', id).maybeSingle(),
     sb.rpc('chat_group_members', { p_group: id }),
     chatMessagesQuery(id),
     // Reações das mensagens do grupo (027): quem reagiu e com qual emoji.
@@ -5749,6 +5764,14 @@ function drawChatInfo(id, data, urls = {}) {
                 <small class="hint">Os outros participantes leem, mas não escrevem. Bom para recados da direção.</small></label>
               <label class="check"><input type="checkbox" name="show_on_home" ${g.show_on_home ? 'checked' : ''}> Mostrar no Início
                 <small class="hint">Um atalho com o nome do grupo na tela inicial de quem está no grupo.</small></label>
+              <fieldset class="icon-choice" id="home-icon-choice" ${g.show_on_home ? '' : 'hidden'}>
+                <legend>Ícone do atalho</legend>
+                <div class="icon-choice-grid">
+                  ${HOME_ICONS.map(
+                    ([k, label]) => `<label title="${label}"><input type="radio" name="home_icon" value="${k}" ${(g.home_icon || 'chat') === k ? 'checked' : ''} aria-label="${label}">${icon[k]}</label>`,
+                  ).join('')}
+                </div>
+              </fieldset>
               <button class="btn primary">Salvar</button>
             </form>`
           : g.locked
@@ -5789,7 +5812,7 @@ function drawChatInfo(id, data, urls = {}) {
     const list = screenCached('chat');
     const row = list?.find((x) => x.id === id);
     if (row) {
-      Object.assign(row, { name: data.group.name, description: data.group.description, locked: data.group.locked, members: data.people.length, show_on_home: !!data.group.show_on_home });
+      Object.assign(row, { name: data.group.name, description: data.group.description, locked: data.group.locked, members: data.people.length, show_on_home: !!data.group.show_on_home, home_icon: data.group.home_icon ?? null });
       screenUpdate('chat', list);
     }
     toast(msg);
@@ -5825,16 +5848,19 @@ function drawChatInfo(id, data, urls = {}) {
       toast(errorText(err), 'error');
     }
   });
+  // "Mostrar no Início" marcado: aparece a escolha do ícone.
+  const homeBox = document.querySelector('#group-form [name="show_on_home"]');
+  homeBox?.addEventListener('change', () => (document.getElementById('home-icon-choice').hidden = !homeBox.checked));
   document.getElementById('group-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = e.currentTarget;
     const { error } = await sb
       .from('chat_groups')
-      .update({ name: f.name.value.trim(), description: f.description.value.trim() || null, locked: f.locked.checked, show_on_home: f.show_on_home.checked })
+      .update({ name: f.name.value.trim(), description: f.description.value.trim() || null, locked: f.locked.checked, show_on_home: f.show_on_home.checked, home_icon: homeIconValue(f) })
       .eq('id', id);
     if (error) return toast(errorText(error), 'error');
     after('Grupo salvo.', (d) =>
-      Object.assign(d.group, { name: f.name.value.trim(), description: f.description.value.trim() || null, locked: f.locked.checked, show_on_home: f.show_on_home.checked }),
+      Object.assign(d.group, { name: f.name.value.trim(), description: f.description.value.trim() || null, locked: f.locked.checked, show_on_home: f.show_on_home.checked, home_icon: homeIconValue(f) }),
     );
   });
   $view.querySelectorAll('[data-admin]').forEach(

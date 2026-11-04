@@ -173,15 +173,24 @@ test('chat: o grupo vai para o Início pelo Editar grupo; a lista muda de ordem 
   ids.g2 = await group(`${tag} Dois`);
   // A líder (administradora do grupo) liga "Mostrar no Início".
   await openLoggedIn(page, as['lider-a'].session, `/i/teste-a/#/chat/${ids.g1}/info`);
+  await expect(page.locator('#home-icon-choice')).toBeHidden();
   await page.getByLabel(/Mostrar no Início/).check();
+  // Com "Mostrar no Início" marcado, escolhe o ícone do atalho.
+  await expect(page.locator('#home-icon-choice')).toBeVisible();
+  await page.getByRole('radio', { name: 'Coração' }).check({ force: true });
   await page.getByRole('button', { name: 'Salvar' }).click();
   await expect(page.getByText('Grupo salvo.')).toBeVisible();
+  const [saved] = await (await api.get(rest(`chat_groups?select=home_icon&id=eq.${ids.g1}`), { headers: as['lider-a'].headers })).json();
+  expect(saved.home_icon).toBe('heart');
   // O membro vê o atalho no Início e muda a ordem da própria lista.
   const ctx = await page.context().browser().newContext({ ...test.info().project.use, baseURL: 'http://localhost:4173/' });
   const member = await ctx.newPage();
   await openLoggedIn(member, as['membro-a'].session, '/i/teste-a/#/');
   const tile = member.locator('#home-shortcuts [data-chat-tile]', { hasText: `${tag} Um` });
   await expect(tile).toBeVisible();
+  // O atalho tem o ícone escolhido (o mesmo desenho do atalho "Oração").
+  const heart = await member.locator('#home-shortcuts .shortcut[data-key="oracao"] svg').innerHTML();
+  await expect.poll(() => tile.locator('svg').innerHTML()).toBe(heart);
   await tile.click();
   await expect(member.locator('#chat-name')).toHaveText(`${tag} Um`);
   await member.goto('/i/teste-a/#/chat');
