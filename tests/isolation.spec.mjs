@@ -1205,6 +1205,8 @@ test.describe('Ícone do grupo no Início (035)', () => {
       const ok = await set('heart');
       expect(ok.ok(), await ok.text()).toBe(true);
       expect((await ok.json())[0].home_icon).toBe('heart');
+      // Os ícones novos (037).
+      for (const k of ['palette', 'puzzle', 'box', 'apple', 'graduation', 'laminator']) expect((await set(k)).ok(), k).toBe(true);
       // Quem não administra o grupo não muda (nenhuma linha muda).
       const other = await api.patch(rest(`chat_groups?id=eq.${id}`), { headers: returning(as['membro-a'].headers), data: { home_icon: 'sun' } });
       expect(other.ok() ? await other.json() : []).toEqual([]);

@@ -192,6 +192,14 @@ test('a liderança cria o grupo, escolhe quem participa e escreve com emoji, lin
   await expect(box).toHaveValue('');
 
   // Anexo (documento): aparece como arquivo para abrir.
+  // O clipe abre as opções: galeria do celular, câmera ou arquivo.
+  await page.getByRole('button', { name: 'Anexar foto, vídeo ou arquivo' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Anexar' });
+  await expect(sheet.getByRole('menuitem', { name: 'Fotos e vídeos da galeria' })).toBeVisible();
+  await expect(sheet.getByRole('menuitem', { name: 'Tirar foto' })).toBeVisible();
+  const [gallery] = await Promise.all([page.waitForEvent('filechooser'), sheet.getByRole('menuitem', { name: 'Fotos e vídeos da galeria' }).click()]);
+  expect(gallery.isMultiple()).toBe(true);
+  expect(await gallery.element().getAttribute('accept')).toBe('image/*,video/*');
   await page.locator('#chat-file').setInputFiles({ name: 'lista.txt', mimeType: 'text/plain', buffer: Buffer.from('Material da semana') });
   await expect(page.locator('.msg.mine').last().locator('.msg-doc')).toContainText('lista.txt');
   await expect(page.locator('.msg.mine').last().locator('a.msg-doc')).toBeVisible({ timeout: 15000 });

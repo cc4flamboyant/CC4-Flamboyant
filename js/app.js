@@ -600,6 +600,14 @@ function errorText(err) {
 }
 
 const icon = {
+  // Ícones dos atalhos dos grupos do chat (037): temas, integração, achados e perdidos,
+  // lanche coletivo, encerramento e plastificadora.
+  palette: '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.7-.8 1.7-1.7 0-.5-.2-.9-.5-1.2s-.5-.7-.5-1.2c0-.9.8-1.7 1.7-1.7H16a5 5 0 0 0 5-5c0-4-4-7.2-9-7.2z"/><circle cx="7.5" cy="11.5" r="1.1"/><circle cx="10" cy="7.3" r="1.1"/><circle cx="15" cy="7.8" r="1.1"/></svg>',
+  puzzle: '<svg viewBox="0 0 24 24"><path d="M5 8.5h3.6a2.2 2.2 0 1 1 4.3 0h3.6v3.6a2.2 2.2 0 1 1 0 4.3v3.6H5z"/></svg>',
+  box: '<svg viewBox="0 0 24 24"><path d="M3.5 8 12 4l8.5 4v9L12 21l-8.5-4z"/><path d="M3.5 8 12 12l8.5-4M12 12v9M7.7 6l8.5 4"/></svg>',
+  apple: '<svg viewBox="0 0 24 24"><path d="M12 7.5c-1.6-1.3-4.6-1.4-6.1.6-1.8 2.4-.9 7 1.5 10 1.3 1.7 2.7 2 4.6 1 1.9 1 3.3.7 4.6-1 2.4-3 3.3-7.6 1.5-10-1.5-2-4.5-1.9-6.1-.6z"/><path d="M12 7.5c0-2 .9-3.5 2.6-4.3"/></svg>',
+  graduation: '<svg viewBox="0 0 24 24"><path d="M2.5 9.5 12 5l9.5 4.5L12 14z"/><path d="M6.5 11.6v4.2c1.5 1.4 3.4 2.2 5.5 2.2s4-.8 5.5-2.2v-4.2M21.5 9.5v5"/></svg>',
+  laminator: '<svg viewBox="0 0 24 24"><rect x="2.5" y="10" width="19" height="6.5" rx="3.25"/><path d="M7 10V3.5h10V10M7 16.5v4h10v-4"/><circle cx="6.8" cy="13.25" r=".9"/></svg>',
   home: '<svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
   menu: '<svg viewBox="0 0 24 24"><path d="M4 6.5h16M4 12h16M4 17.5h16"/></svg>',
   church: '<svg viewBox="0 0 24 24"><path d="M12 2v5M9.5 4.5h5M5 21V11l7-4 7 4v10z"/><path d="M10 21v-4a2 2 0 0 1 4 0v4"/></svg>',
@@ -1233,6 +1241,8 @@ const HOME_ICONS = [
   ['calendar', 'Calendário'], ['clipboard', 'Prancheta'], ['book', 'Livro'], ['project', 'Ideia'],
   ['child', 'Criança'], ['heart', 'Coração'], ['cake', 'Bolo'], ['image', 'Foto'],
   ['camera', 'Câmera'], ['chart', 'Gráfico'], ['pin', 'Lugar'], ['sun', 'Sol'],
+  ['palette', 'Temas'], ['puzzle', 'Integração'], ['box', 'Achados e perdidos'],
+  ['apple', 'Lanche coletivo'], ['graduation', 'Encerramento'], ['laminator', 'Plastificadora'],
 ];
 const homeIcon = (key) => (HOME_ICONS.some(([k]) => k === key) ? icon[key] : icon.chat);
 
@@ -5352,7 +5362,10 @@ function chatComposeHtml() {
       <div class="compose-reply" id="chat-reply" hidden></div>
       <div class="chat-bar">
         <button type="button" class="chat-btn" id="chat-emoji-btn" aria-label="Emojis" aria-expanded="false">😊</button>
-        <label class="chat-btn" aria-label="Anexar foto, vídeo ou arquivo" title="Anexar">${icon.clip}<input type="file" id="chat-file" accept="${CHAT_ACCEPT}" hidden></label>
+        <button type="button" class="chat-btn" id="chat-attach" aria-label="Anexar foto, vídeo ou arquivo" title="Anexar">${icon.clip}</button>
+        <input type="file" id="chat-gallery" accept="image/*,video/*" multiple hidden>
+        <input type="file" id="chat-camera" accept="image/*" capture="environment" hidden>
+        <input type="file" id="chat-file" accept="${CHAT_ACCEPT}" hidden>
         <textarea name="body" rows="1" maxlength="4000" placeholder="Mensagem" aria-label="Mensagem"></textarea>
         <button class="chat-btn send" aria-label="Enviar">${icon.send}</button>
       </div>
@@ -5417,24 +5430,41 @@ function bindChatCompose(id) {
     panel.hidden = true;
     chatSetReply(id, null);
   });
-  document.getElementById('chat-file').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
+  // Anexar: a galeria do celular (fotos e vídeos, várias de uma vez), a câmera ou um arquivo.
+  document.getElementById('chat-attach').addEventListener('click', async () => {
+    const pick = await actionMenu('Anexar', [
+      ['galeria', 'Fotos e vídeos da galeria', false, 'image'],
+      ['camera', 'Tirar foto', false, 'camera'],
+      ['arquivo', 'Documento ou arquivo', false, 'file'],
+    ]);
+    const input = { galeria: 'chat-gallery', camera: 'chat-camera', arquivo: 'chat-file' }[pick];
+    if (input) document.getElementById(input).click();
+  });
+  const sendPicked = async (e) => {
+    const files = [...e.target.files];
     e.target.value = '';
-    if (!file) return;
-    const caption = text.value.trim();
+    if (!files.length) return;
+    // A legenda (e a resposta) vão com o primeiro anexo.
+    let caption = text.value.trim();
     const status = document.getElementById('chat-status');
-    status.textContent = `Enviando ${file.name}…`;
     try {
-      await chatSendFile(id, file, caption, chatReplyFor(id));
-      chatSetReply(id, null);
-      text.value = '';
-      grow();
+      for (const [i, file] of files.entries()) {
+        status.textContent = files.length > 1 ? `Enviando ${i + 1} de ${files.length}…` : `Enviando ${file.name}…`;
+        await chatSendFile(id, file, caption, i === 0 ? chatReplyFor(id) : null);
+        if (i === 0) {
+          chatSetReply(id, null);
+          text.value = '';
+          grow();
+          caption = '';
+        }
+      }
       status.textContent = '';
     } catch (err) {
       status.textContent = '';
       toast(errorText(err), 'error');
     }
-  });
+  };
+  for (const name of ['chat-gallery', 'chat-camera', 'chat-file']) document.getElementById(name).addEventListener('change', sendPicked);
 }
 
 const chatMeId = (id) => chatMe(screenCached(`chat:${id}`) || { people: [] })?.member_id || null;

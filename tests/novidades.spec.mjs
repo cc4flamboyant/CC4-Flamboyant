@@ -270,6 +270,9 @@ test('chat: o grupo vai para o Início pelo Editar grupo; a lista muda de ordem 
   await page.getByLabel(/Mostrar no Início/).check();
   // Com "Mostrar no Início" marcado, escolhe o ícone do atalho.
   await expect(page.locator('#home-icon-choice')).toBeVisible();
+  // Os ícones novos estão na lista (037).
+  for (const name of ['Temas', 'Integração', 'Achados e perdidos', 'Lanche coletivo', 'Encerramento', 'Plastificadora'])
+    await expect(page.getByRole('radio', { name })).toHaveCount(1);
   await page.getByRole('radio', { name: 'Coração' }).check({ force: true });
   await page.getByRole('button', { name: 'Salvar' }).click();
   await expect(page.getByText('Grupo salvo.')).toBeVisible();
