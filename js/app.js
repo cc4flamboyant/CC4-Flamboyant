@@ -6,6 +6,7 @@ import {
   renderMessage, firstName, joinNames, REACTIONS, CHAT_EMOJIS, linkify, fmtBytes, MESSAGE_FIELDS, SPECIAL_FIELDS, yearsText, MESSAGE_EMOJIS, icsForEvent, googleCalendarUrl, REMIND_OPTIONS,
 } from './util.js';
 import { resizeImage, resizeLogo, makeIconSet, resizeForGallery } from './images.js';
+import { CARD_SWATCHES, CARD_FONTS, CARD_FONT_DIR, CARD_DEFAULTS, CARD_LIMITS, cardColor, cardOptions, cardSize, drawCard as drawBirthdayCard } from './cartao.js';
 import { maybeSuggestInstall, installState, installNow, iconReady, ICON_PREPARING } from './install.js';
 import { pushSupport, pushActive, enablePush, disablePush, syncPush, movePushToPage } from './push.js';
 import { PIX_TYPES, guessPixType, normalizePixKey, formatPixKey, parseAmount, pixPayload, qrSvg, qrImage } from './pix.js';
@@ -242,7 +243,7 @@ function prefetchScreens() {
     screenFetch('notificacoes:todas', async () => {
       const { data, error } = await sb
         .from('notifications')
-        .select('id, kind, title, body, url, read_at, created_at')
+        .select('id, kind, title, body, url, read_at, created_at, image_url')
         .eq('church_id', state.church.id)
         .order('created_at', { ascending: false })
         .range(0, NOTIF_PAGE);
@@ -7353,6 +7354,7 @@ function notifList(items) {
         <span class="notif-text">
           <span class="notif-head"><strong>${esc(n.title)}</strong><time datetime="${esc(n.created_at)}">${esc(notifTime(n.created_at))}</time></span>
           ${n.body ? `<small>${esc(n.body)}</small>` : ''}
+          ${n.image_url ? `<img class="notif-image" src="${esc(n.image_url)}" alt="" loading="lazy">` : ''}
         </span>
         ${n.unread ? '<span class="notif-dot" aria-label="Não lida"></span>' : ''}
       </a>`;
@@ -7635,6 +7637,23 @@ const MESSAGE_SCREEN = {
   },
 };
 
+// Letras do cartão de aniversário: cada uma baixada uma vez, só quando escolhida (fonts/cartao/).
+const cardFontLoads = new Map();
+function loadCardFont(key) {
+  const f = CARD_FONTS[key];
+  if (!f?.family || typeof FontFace === 'undefined') return Promise.resolve();
+  if (!cardFontLoads.has(key)) {
+    const load = Promise.all(
+      Object.entries(f.files).map(async ([weight, file]) => {
+        const face = new FontFace(f.family, `url(${new URL(CARD_FONT_DIR + file, ROOT_URL).href})`, { weight });
+        document.fonts.add(await face.load());
+      }),
+    ).catch(() => cardFontLoads.delete(key)); // sem internet: tenta de novo na próxima
+    cardFontLoads.set(key, load);
+  }
+  return cardFontLoads.get(key);
+}
+
 async function viewMessageSettings(ctx, kind) {
   if (!requireLogin(`/config/${kind}`)) return;
   if (myRole() !== 'admin') {
@@ -7691,6 +7710,32 @@ async function viewMessageSettings(ctx, kind) {
         <div class="actions-row">
           <button type="button" class="btn link small" id="image-remove" ${t.image_url ? '' : 'hidden'}>Remover imagem</button>
         </div>
+        ${
+          // Cartão (031): só aparece com o banco já atualizado.
+          'card' in t
+            ? `<label class="check"><input type="checkbox" name="card" ${t.card ? 'checked' : ''}> Escrever o título e a mensagem dentro da imagem, como um cartão</label>
+        <div class="card-options" id="card-options" ${t.card ? '' : 'hidden'}>
+          <p class="hint" id="card-no-image" hidden>Escolha uma imagem para montar o cartão.</p>
+          <div class="card-editor" id="card-editor" hidden>
+            <canvas id="card-edit" role="img" aria-label="Cartão: arraste o texto para posicionar"></canvas>
+            <p class="hint">Arraste o texto com o dedo (ou o mouse) para o lugar certo da imagem. Tocar fora do texto leva o texto para lá.</p>
+          </div>
+          <label>Tamanho do texto <output id="card-size-out"></output><input type="range" name="card_size" min="${CARD_LIMITS.size[0]}" max="${CARD_LIMITS.size[1]}" step="5"></label>
+          <label>Largura da área do texto <output id="card-width-out"></output><input type="range" name="card_width" min="${CARD_LIMITS.width[0]}" max="${CARD_LIMITS.width[1]}" step="1"></label>
+          <label>Letra<select name="card_font">${Object.entries(CARD_FONTS)
+            .map(([v, f]) => `<option value="${v}" ${(t.card_font || 'padrao') === v ? 'selected' : ''}>${esc(f.label)}</option>`)
+            .join('')}</select></label>
+          <div class="card-row">
+            ${colorField('Cor da letra', 'card_text_color', cardColor(t.card_text_color))}
+            <button type="button" class="btn small" id="card-center">Centralizar</button>
+          </div>
+          <div class="swatches" role="group" aria-label="Cores prontas">${Object.entries(CARD_SWATCHES)
+            .map(([hex, name]) => `<button type="button" class="swatch" data-color="${hex}" style="background:${hex}" aria-label="${name}" title="${name}"></button>`)
+            .join('')}</div>
+          <p class="hint">Cada pessoa recebe o cartão com o nome dela, no e-mail, na notificação do celular e no app. Use uma arte sem texto, com espaço livre onde vai a mensagem. Nomes longos ocupam mais espaço: deixe uma folga.</p>
+        </div>`
+            : ''
+        }
       </fieldset>
 
       <fieldset class="card">
@@ -7711,6 +7756,8 @@ async function viewMessageSettings(ctx, kind) {
         <div class="push-preview">
           <img src="${esc(state.church.logo_url || 'icons/icon-192.png')}" alt="" width="36" height="36">
           <div><strong id="pv-title"></strong><p id="pv-body"></p></div>
+          <img class="pv-image" id="pv-image" alt="" hidden>
+          <canvas class="pv-image" id="pv-card" role="img" aria-label="Cartão com a mensagem" hidden></canvas>
         </div>
         <p class="hint">Assim chega para ${esc(sample.name.split(' ')[0])}, ${esc(screen.sample(sample.age))}.</p>
       </section>
@@ -7719,16 +7766,154 @@ async function viewMessageSettings(ctx, kind) {
     </form>`;
 
   const form = document.getElementById('bday');
+  const $id = (x) => document.getElementById(x);
   let imageFile = null;
   let removeImage = false;
   let lastField = form.body;
+  let pvSrc = t.image_url || null;
+  let pvImg = null;
+  const place = cardOptions({ x: t.card_x, y: t.card_y, width: t.card_width, size: t.card_size });
+  let textBox = null; // área do texto no editor, para saber onde o dedo tocou
+
+  const syncCardInputs = () => {
+    if (!form.card_size) return;
+    form.card_size.value = place.size;
+    form.card_width.value = place.width;
+    $id('card-size-out').textContent = `${place.size}%`;
+    $id('card-width-out').textContent = `${place.width}%`;
+  };
+  syncCardInputs();
+
+  // Prévia da imagem: sem cartão, a imagem como chega; com cartão, o cartão desenhado
+  // (a prévia limpa e o editor com o contorno da área do texto).
+  const drawImagePreview = () => {
+    const card = !!form.card?.checked;
+    const options = $id('card-options');
+    if (options) options.hidden = !card;
+    const img = $id('pv-image');
+    const canvas = $id('pv-card');
+    const showCard = card && !!pvSrc && !!pvImg?.naturalWidth;
+    img.hidden = !pvSrc || (card && !!pvSrc);
+    canvas.hidden = !showCard;
+    if (options) {
+      $id('card-editor').hidden = !showCard;
+      $id('card-no-image').hidden = !!pvSrc;
+    }
+    if (pvSrc && !card) img.src = pvSrc;
+    if (!showCard) return;
+    const { width, height } = cardSize(pvImg.naturalWidth, pvImg.naturalHeight);
+    const text = {
+      title: renderMessage(form.title.value, sample),
+      body: renderMessage(form.body.value, sample),
+      color: form.card_text_color.value,
+      font: form.card_font.value,
+      ...place,
+    };
+    for (const [c, guide] of [
+      [canvas, false],
+      [$id('card-edit'), true],
+    ]) {
+      c.width = width;
+      c.height = height;
+      const box = drawBirthdayCard(c.getContext('2d'), pvImg, { ...text, guide }, width, height);
+      if (guide) textBox = box;
+    }
+  };
+  const showPreviewImage = (src) => {
+    pvSrc = src;
+    pvImg = null;
+    if (src) {
+      const img = new Image();
+      img.crossOrigin = 'anonymous'; // imagem do Storage no canvas sem "sujar" (os testes leem os pontos)
+      img.onload = () => {
+        if (pvSrc !== src) return; // trocou de imagem no meio
+        pvImg = img;
+        drawImagePreview();
+      };
+      img.src = src;
+    }
+    drawImagePreview();
+  };
   const preview = () => {
-    document.getElementById('pv-title').textContent = renderMessage(form.title.value, sample);
-    document.getElementById('pv-body').textContent = renderMessage(form.body.value, sample);
+    $id('pv-title').textContent = renderMessage(form.title.value, sample);
+    $id('pv-body').textContent = renderMessage(form.body.value, sample);
+    drawImagePreview();
   };
   preview();
+  showPreviewImage(pvSrc);
   form.title.addEventListener('input', preview);
   form.body.addEventListener('input', preview);
+  form.card?.addEventListener('change', drawImagePreview);
+
+  if (form.card_font) {
+    const useFont = () => loadCardFont(form.card_font.value).then(() => form.isConnected && drawImagePreview());
+    form.card_font.addEventListener('change', () => {
+      drawImagePreview();
+      useFont();
+    });
+    useFont();
+    bindColorFields(form);
+    form.card_text_color.addEventListener('input', drawImagePreview);
+    for (const b of form.querySelectorAll('.swatch')) {
+      b.onclick = () => {
+        form.card_text_color.value = b.dataset.color;
+        form.card_text_color.dispatchEvent(new Event('input'));
+      };
+    }
+    for (const name of ['card_size', 'card_width']) {
+      form[name].addEventListener('input', () => {
+        place[name === 'card_size' ? 'size' : 'width'] = Number(form[name].value);
+        syncCardInputs();
+        drawImagePreview();
+      });
+    }
+    $id('card-center').onclick = () => {
+      Object.assign(place, { x: CARD_DEFAULTS.x, y: CARD_DEFAULTS.y });
+      drawImagePreview();
+    };
+
+    // Arrastar o texto: o centro da área anda junto com o dedo, sem sair da imagem.
+    const editor = $id('card-edit');
+    let drag = null;
+    const point = (e) => {
+      const r = editor.getBoundingClientRect();
+      return { x: ((e.clientX - r.left) / r.width) * editor.width, y: ((e.clientY - r.top) / r.height) * editor.height };
+    };
+    editor.addEventListener('pointerdown', (e) => {
+      const p = point(e);
+      drag = { from: p, x: place.x, y: place.y };
+      // Tocou fora do texto: o texto pula para lá e continua arrastando.
+      const b = textBox;
+      if (b && (p.x < b.left || p.x > b.left + b.width || p.y < b.top || p.y > b.top + b.height)) {
+        drag.x = (p.x / editor.width) * 100;
+        drag.y = (p.y / editor.height) * 100;
+        Object.assign(place, { x: drag.x, y: drag.y });
+        drawImagePreview();
+      }
+      try {
+        editor.setPointerCapture(e.pointerId);
+      } catch {}
+      e.preventDefault();
+    });
+    editor.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const p = point(e);
+      place.x = Math.min(100, Math.max(0, drag.x + ((p.x - drag.from.x) / editor.width) * 100));
+      place.y = Math.min(100, Math.max(0, drag.y + ((p.y - drag.from.y) / editor.height) * 100));
+      drawImagePreview();
+    });
+    const stop = () => {
+      if (!drag) return;
+      drag = null;
+      // Guarda onde o texto ficou de fato (ele não sai da imagem).
+      if (textBox) {
+        place.x = Math.round(((textBox.left + textBox.width / 2) / editor.width) * 100);
+        place.y = Math.round(((textBox.top + textBox.height / 2) / editor.height) * 100);
+      }
+    };
+    editor.addEventListener('pointerup', stop);
+    editor.addEventListener('pointercancel', stop);
+  }
   form.title.addEventListener('focus', () => (lastField = form.title));
   form.body.addEventListener('focus', () => (lastField = form.body));
   form.querySelectorAll('[data-field], [data-insert]').forEach((b) => {
@@ -7746,8 +7931,10 @@ async function viewMessageSettings(ctx, kind) {
     imageFile = form.image.files[0] || null;
     if (!imageFile) return;
     removeImage = false;
-    document.getElementById('image-box').innerHTML = `<img src="${URL.createObjectURL(imageFile)}" alt="">`;
+    const src = URL.createObjectURL(imageFile);
+    document.getElementById('image-box').innerHTML = `<img src="${src}" alt="">`;
     document.getElementById('image-remove').hidden = false;
+    showPreviewImage(src);
   });
   document.getElementById('image-remove').onclick = () => {
     imageFile = null;
@@ -7755,6 +7942,7 @@ async function viewMessageSettings(ctx, kind) {
     form.image.value = '';
     document.getElementById('image-box').innerHTML = `<p class="image-empty">${icon.image}<span>Toque para escolher uma imagem</span></p>`;
     document.getElementById('image-remove').hidden = true;
+    showPreviewImage(null);
   };
 
   form.addEventListener('submit', async (e) => {
@@ -7771,6 +7959,18 @@ async function viewMessageSettings(ctx, kind) {
         send_email: form.send_email.checked,
         updated_at: new Date().toISOString(),
       };
+      // Só grava as colunas do cartão se o banco já tem (app novo em banco antigo não quebra).
+      if ('card' in t) {
+        Object.assign(patch, {
+          card: form.card.checked,
+          card_font: form.card_font.value,
+          card_text_color: cardColor(form.card_text_color.value),
+          card_x: Math.round(place.x),
+          card_y: Math.round(place.y),
+          card_width: place.width,
+          card_size: place.size,
+        });
+      }
       if (imageFile) {
         const img = await resizeImage(imageFile, 1080, 0.82);
         const path = `${state.church.id}/${kind}/imagem-${Date.now()}.${img.type === 'image/webp' ? 'webp' : 'jpg'}`;

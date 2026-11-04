@@ -7,7 +7,7 @@
 // Esse cache (FOTOS) passa de uma versão para outra e é apagado ao sair da conta (js/app.js).
 // O build (scripts/build-site.mjs) acrescenta ao nome do cache um código do conteúdo do app:
 // qualquer mudança de código gera uma versão nova sozinha.
-const CACHE = 'cc4-v51';
+const CACHE = 'cc4-v52';
 const ANDROID = /android/i.test(self.navigator.userAgent);
 const FOTOS = 'cc4-fotos';
 const FOTOS_MAX = 400; // as mais antigas saem
@@ -21,6 +21,7 @@ const SHELL = [
   'js/app.js',
   'js/config.js',
   'js/util.js',
+  'js/cartao.js',
   'js/images.js',
   'js/install.js',
   'js/push.js',

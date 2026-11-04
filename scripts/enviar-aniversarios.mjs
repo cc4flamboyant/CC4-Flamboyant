@@ -4,9 +4,11 @@
 // E-mail: Gmail ou Resend (scripts/email.mjs). Sem nenhum dos dois, só push.
 // Com EMAIL_TEST=1, só manda um e-mail de teste para o próprio Gmail e para.
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import webpush from 'web-push';
 import { emailOn, gmailOn, gmailUser, deliverEmail, closeEmail } from './email.mjs';
 import { renderMessage, joinNames, firstName, yearsText, esc } from '../js/util.js';
+import { CARD_FONTS, CARD_FONT_DIR, cardSize, drawCard } from '../js/cartao.js';
 
 const config = readFileSync(new URL('../js/config.js', import.meta.url), 'utf8');
 const pick = (key) => config.match(new RegExp(`${key}:\\s*'([^']+)'`))?.[1];
@@ -85,6 +87,81 @@ function byLog(rows) {
 const inApp = await rpc('deliver_birthday_notifications');
 
 // ---------------------------------------------------------------------
+// 1b. Cartões (031): o título e a mensagem escritos dentro da imagem, com o nome de cada pessoa.
+//     Mesmo desenho da prévia no app (js/cartao.js). Se o cartão falhar, a mensagem sai com a
+//     imagem sem texto: o parabéns nunca deixa de ir por causa dele.
+// ---------------------------------------------------------------------
+const cards = new Map();
+const cardKey = (slug, kind, name, years) => `${slug}|${kind}|${name}|${years}`;
+const cardOf = (r) => cards.get(cardKey(r.church_slug, r.kind, r.name, r.age ?? r.years)) || r.image_url || undefined;
+
+let fontsReady = false;
+async function makeCard(r) {
+  const { createCanvas, loadImage, GlobalFonts } = await import('@napi-rs/canvas');
+  if (!fontsReady) {
+    // O mesmo nome de família da prévia no app: a mesma letra nos dois lados.
+    for (const f of Object.values(CARD_FONTS)) {
+      for (const file of Object.values(f.files || {})) {
+        GlobalFonts.registerFromPath(fileURLToPath(new URL(`../${CARD_FONT_DIR}${file}`, import.meta.url)), f.family);
+      }
+    }
+    fontsReady = true;
+  }
+  const res = await fetch(r.image_url);
+  if (!res.ok) throw new Error(`imagem: ${res.status}`);
+  const img = await loadImage(Buffer.from(await res.arrayBuffer()));
+  const { width, height } = cardSize(img.width, img.height);
+  const canvas = createCanvas(width, height);
+  const data = { name: r.name, church: r.church_name, age: r.years };
+  drawCard(
+    canvas.getContext('2d'),
+    img,
+    {
+      title: renderMessage(r.title, data),
+      body: renderMessage(r.body, data),
+      color: r.card_text_color,
+      font: r.card_font,
+      x: r.card_x,
+      y: r.card_y,
+      width: r.card_width,
+      size: r.card_size,
+    },
+    width,
+    height,
+  );
+  const jpg = await canvas.encode('jpeg', 85);
+  const up = await fetch(`${SUPABASE_URL}/functions/v1/guardar-cartao?igreja=${encodeURIComponent(r.church_id)}`, {
+    method: 'POST',
+    headers: { 'x-envio-secret': ENVIO_SECRET, 'Content-Type': 'image/jpeg' },
+    body: jpg,
+  });
+  if (!up.ok) throw new Error(`guardar-cartao: ${up.status}`);
+  return (await up.json()).url;
+}
+
+let cardsMade = 0;
+let cardFails = 0;
+for (const r of await rpc('claim_celebration_cards').catch((err) => {
+  console.error(`Cartões indisponíveis (${err.message.slice(0, 80)}): as mensagens saem com a imagem sem texto.`);
+  return [];
+})) {
+  const key = cardKey(r.church_slug, r.kind, r.name, r.years);
+  if (r.card_url) {
+    cards.set(key, r.card_url); // já feito hoje
+    continue;
+  }
+  try {
+    const url = cards.get(key) || (await makeCard(r)); // mesmo nome e idade: o cartão é igual
+    await rpc('save_celebration_card', { p_member: r.member_id, p_kind: r.kind, p_date: r.target_date, p_url: url });
+    cards.set(key, url);
+    cardsMade++;
+  } catch (err) {
+    cardFails++;
+    console.error(`Falha num cartão (${err.message.slice(0, 80)})`); // sem nome: o registro do GitHub é público
+  }
+}
+
+// ---------------------------------------------------------------------
 // 2. Push de aniversário
 // ---------------------------------------------------------------------
 for (const r of byLog(await rpc('claim_birthday_push'))) {
@@ -95,7 +172,7 @@ for (const r of byLog(await rpc('claim_birthday_push'))) {
     url: churchUrl(r.church_slug, '#/'),
     tag: `${r.kind}-${r.log_id}`,
     icon: churchUrl(r.church_slug, 'icon-192.png'),
-    image: r.image_url || undefined,
+    image: cardOf(r),
   };
   const results = await Promise.all(r.subs.map((s) => push(s, msg)));
   if (!results.some(Boolean)) await rpc('mark_message_failed', { p_log_id: r.log_id });
@@ -127,7 +204,7 @@ function emailHtml(r, title, body) {
   return `<!doctype html><html lang="pt-BR"><body style="margin:0;background:#f5f6fa;font-family:Arial,sans-serif;color:#1b1e27">
   <div style="max-width:560px;margin:0 auto;padding:24px 16px">
     <div style="background:#fff;border-radius:14px;overflow:hidden;border:1px solid #e2e4ec">
-      ${r.image_url ? `<img src="${esc(r.image_url)}" alt="" style="display:block;width:100%;height:auto">` : ''}
+      ${cardOf(r) ? `<img src="${esc(cardOf(r))}" alt="" style="display:block;width:100%;height:auto">` : ''}
       <div style="padding:24px">
         <h1 style="font-size:22px;margin:0 0 12px">${esc(title)}</h1>
         <p style="font-size:16px;line-height:1.5;margin:0;white-space:pre-line">${esc(body)}</p>
@@ -222,5 +299,5 @@ await rpc('clean_notifications');
 await rpc('clean_kids');
 
 // Só números: nada de nome ou endereço de aparelho no registro público do GitHub.
-console.log(`Aniversários e datas especiais: ${inApp} na central do app (${inAppKids} de filhos), ${stats.push} push, ${stats.email} e-mail(s), ${backlog} e-mail(s) para amanhã, ${stats.gone} aparelho(s) removido(s), ${stats.failed} falha(s).`);
+console.log(`Aniversários e datas especiais: ${inApp} na central do app (${inAppKids} de filhos), ${stats.push} push, ${stats.email} e-mail(s), ${backlog} e-mail(s) para amanhã, ${stats.gone} aparelho(s) removido(s), ${stats.failed} falha(s), ${cardsMade} cartão(ões) novo(s), ${cardFails} cartão(ões) com falha.`);
 if (stats.failed && !stats.push && !stats.email) process.exit(1);

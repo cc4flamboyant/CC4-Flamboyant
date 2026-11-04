@@ -60,7 +60,7 @@ test('a liderança vê todos, com a idade, e pode imprimir', async ({ page }) =>
 
 test('o admin vê a prévia da mensagem com os campos trocados', async ({ page }) => {
   await openLoggedIn(page, accounts['adm-a'].session, '/i/teste-a/#/config/aniversario');
-  await page.getByLabel('Título').fill('Parabéns, ');
+  await page.getByLabel('Título', { exact: true }).fill('Parabéns, ');
   await page.getByRole('button', { name: '{primeiro_nome}' }).click();
   await expect(page.locator('#pv-title')).toHaveText('Parabéns, Admin');
   await page.getByRole('textbox', { name: 'Mensagem', exact: true }).fill('{instituicao} deseja feliz {idade} anos!');
@@ -68,9 +68,80 @@ test('o admin vê a prévia da mensagem com os campos trocados', async ({ page }
   // Emoji entra onde está o cursor (aqui, no fim da mensagem).
   await page.getByRole('button', { name: 'Colocar 🎂' }).click();
   await expect(page.locator('#pv-body')).toHaveText('Igreja Teste A deseja feliz 30 anos!🎂');
-  await page.getByLabel('Título').focus();
+  await page.getByLabel('Título', { exact: true }).focus();
   await page.getByRole('button', { name: 'Colocar 🎉' }).click();
   await expect(page.locator('#pv-title')).toHaveText('Parabéns, Admin🎉');
+});
+
+test('cartão (031): texto dentro da imagem, arrastar, tamanho, cor e letra (nada é salvo)', async ({ page }) => {
+  await openLoggedIn(page, accounts['adm-a'].session, '/i/teste-a/#/config/aniversario');
+  // Imagem 400x200 de uma cor só.
+  const png = await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    c.width = 400;
+    c.height = 200;
+    const g = c.getContext('2d');
+    g.fillStyle = '#123456';
+    g.fillRect(0, 0, 400, 200);
+    return c.toDataURL('image/png').split(',')[1];
+  });
+  await page.locator('input[name="image"]').setInputFiles({ name: 'arte.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
+  await page.getByLabel(/como um cartão/).check();
+  const card = page.locator('#pv-card');
+  await expect(card).toBeVisible();
+  await expect(card).toHaveJSProperty('width', 1080);
+  await expect(card).toHaveJSProperty('height', 540);
+
+  // Conta os pontos brancos (texto branco) numa faixa do cartão, de a até b (0 a 1).
+  const white = (a = 0, b = 1) =>
+    card.evaluate(
+      (c, [a, b]) => {
+        const x0 = Math.round(c.width * a);
+        const d = c.getContext('2d').getImageData(x0, 0, Math.round(c.width * b) - x0, c.height).data;
+        let n = 0;
+        for (let i = 0; i < d.length; i += 4) if (d[i] > 240 && d[i + 1] > 240 && d[i + 2] > 240) n++;
+        return n;
+      },
+      [a, b],
+    );
+  expect(await white()).toBeGreaterThan(500);
+
+  // Área estreita, arrastada para a esquerda: nada de texto na metade direita.
+  await page.locator('input[name="card_width"]').fill('40');
+  const editor = page.locator('#card-edit');
+  await editor.scrollIntoViewIfNeeded();
+  const r = await editor.boundingBox();
+  await page.mouse.move(r.x + r.width / 2, r.y + r.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(r.x + r.width * 0.15, r.y + r.height / 2, { steps: 10 });
+  await page.mouse.up();
+  await expect.poll(() => white(0.5, 1)).toBeLessThan(20);
+  await page.getByRole('button', { name: 'Centralizar' }).click();
+  await expect.poll(() => white(0.5, 1)).toBeGreaterThan(100);
+
+  // Letras maiores = mais pontos brancos.
+  await page.locator('input[name="card_width"]').fill('100');
+  await page.locator('input[name="card_size"]').fill('50');
+  const before = await white();
+  await page.locator('input[name="card_size"]').fill('80');
+  await expect.poll(() => white()).toBeGreaterThan(before * 1.5);
+
+  // Cor pronta e cor digitada.
+  await page.getByRole('button', { name: 'Preto' }).click();
+  await expect.poll(() => white()).toBeLessThan(50);
+  await page.locator('.color-code[data-for="card_text_color"]').fill('#ffffff');
+  await expect.poll(() => white()).toBeGreaterThan(500);
+
+  // Letra: o arquivo é baixado quando escolhida.
+  await page.locator('select[name="card_font"]').selectOption('greatvibes');
+  await expect
+    .poll(() => page.evaluate(() => [...document.fonts].some((f) => f.family.includes('Cartao GreatVibes') && f.status === 'loaded')))
+    .toBe(true);
+
+  // Desligado: volta a imagem sozinha.
+  await page.getByLabel(/como um cartão/).uncheck();
+  await expect(card).toBeHidden();
+  await expect(page.locator('#pv-image')).toBeVisible();
 });
 
 test('o Início mostra avisos, eventos e aniversariantes num carrossel abaixo dos atalhos', async ({ page }) => {

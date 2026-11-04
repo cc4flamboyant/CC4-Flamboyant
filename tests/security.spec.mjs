@@ -94,6 +94,11 @@ test.describe('Banco: visitante sem login (aniversários)', () => {
     for (const fn of ['claim_event_reminders', 'claim_announcement_push', 'deliver_birthday_notifications', 'clean_notifications']) {
       expect((await rpc(request, fn, { p_secret: 'errada' })).ok(), fn).toBe(false);
     }
+    // Cartão (031): só com a senha do envio.
+    expect((await rpc(request, 'claim_celebration_cards', { p_secret: 'errada' })).ok()).toBe(false);
+    expect(
+      (await rpc(request, 'save_celebration_card', { p_secret: 'errada', p_member: UUID, p_kind: 'aniversario', p_date: '2026-01-01', p_url: 'https://x.supabase.co/a.jpg' })).ok(),
+    ).toBe(false);
     for (const fn of ['deliver_child_birthday_notifications', 'claim_child_birthday_push']) {
       expect((await rpc(request, fn, { p_secret: 'errada' })).ok(), fn).toBe(false);
     }

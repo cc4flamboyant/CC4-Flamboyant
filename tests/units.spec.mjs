@@ -2,6 +2,22 @@
 import { test, expect } from '@playwright/test';
 import { slugify, isValidSlug, churchSlugFromPath, churchRestUrl, inkOn, readableOnWhite, darkPalette, contrastRatio, normalizeHex, normalizePhone, fmtPhone, esc, cardTokenFrom, linkify, fmtBytes } from '../js/util.js';
 import { pixPayload, normalizePixKey, guessPixType, crc16, parseAmount } from '../js/pix.js';
+import { cardSize, cardOptions, cardColor, cardFont, CARD_FONTS } from '../js/cartao.js';
+import { existsSync } from 'node:fs';
+
+test('cartão de aniversário: tamanho fixo, limites, cor e letras', () => {
+  expect(cardSize(400, 200)).toEqual({ width: 1080, height: 540 });
+  expect(cardSize(100, 1000).height).toBe(1620); // muito comprida: corta em 1,5
+  expect(cardSize(1000, 100).height).toBe(540); // muito achatada: corta em 0,5
+  expect(cardOptions({ x: 150, width: 5, size: 999 })).toEqual({ x: 100, y: 50, width: 30, size: 250 });
+  expect(cardColor('escuro')).toBe('#1b1e27');
+  expect(cardColor('nada')).toBe('#ffffff');
+  expect(cardFont('desconhecida').title).toBe(700);
+  // Toda letra da lista tem o arquivo em fonts/cartao/ (o envio das 7h e o app usam os mesmos).
+  for (const f of Object.values(CARD_FONTS)) {
+    for (const file of Object.values(f.files || {})) expect(existsSync(new URL(`../fonts/cartao/${file}`, import.meta.url)), file).toBe(true);
+  }
+});
 
 test('endereço da igreja a partir do nome', () => {
   expect(slugify('Igreja Batista Central')).toBe('igreja-batista-central');

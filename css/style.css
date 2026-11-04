@@ -411,6 +411,23 @@ button.member-row { font: inherit; text-align: left; width: 100%; cursor: pointe
 .push-preview { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); }
 .push-preview img { border-radius: 8px; object-fit: contain; background: #fff; }
 .push-preview p { margin: 2px 0 0; white-space: pre-line; }
+/* Cartão de aniversário (031): prévia e editor. */
+.push-preview { flex-wrap: wrap; }
+.push-preview > div { flex: 1; min-width: 0; }
+.push-preview .pv-image { flex-basis: 100%; width: 100%; height: auto; max-height: 260px; object-fit: cover; background: none; border-radius: 8px; }
+.push-preview .pv-image[hidden] { display: none; }
+.push-preview canvas.pv-image { max-height: none; }
+.card-options { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+.card-options[hidden], .card-editor[hidden] { display: none; }
+.card-options output { font-weight: 400; color: var(--muted); margin-left: 6px; }
+.card-options input[type="range"] { width: 100%; accent-color: var(--brand); }
+.card-row { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.card-row label { flex: 1; }
+/* touch-action: none: senão o dedo rola a página em vez de arrastar o texto. */
+.card-editor canvas { display: block; width: 100%; height: auto; border-radius: 10px; touch-action: none; cursor: move; }
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+.swatch { width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--line); box-shadow: inset 0 0 0 2px var(--surface); cursor: pointer; padding: 0; }
+.notif-image { display: block; width: 100%; max-width: 360px; margin-top: 8px; border-radius: 10px; }
 .bday-image img { display: block; max-width: 100%; max-height: 240px; border-radius: 10px; }
 .chips button.chip { border: 0; cursor: pointer; font: inherit; font-size: .85rem; color: var(--link); }
 .chips.emojis button.chip { font-size: 1.3rem; padding: 4px 10px; line-height: 1.2; }

@@ -50,6 +50,6 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          for f in enviar-push; do
+          for f in enviar-push guardar-cartao; do
             supabase functions deploy "$f" --project-ref "$PROJECT_REF" --no-verify-jwt --use-api
           done

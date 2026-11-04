@@ -13,7 +13,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, supabaseConfigured, fetchPublicChurche
 import { inkOn, churchRestUrl } from '../js/util.js';
 
 const OUT = '_site';
-const STATIC = ['index.html', '404.html', 'privacidade.html', 'termos.html', 'manifest.webmanifest', 'sw.js', 'css', 'js', 'icons'];
+const STATIC = ['index.html', '404.html', 'privacidade.html', 'termos.html', 'manifest.webmanifest', 'sw.js', 'css', 'js', 'icons', 'fonts'];
 const ICONS = ['icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png', 'badge-96.png'];
 
 rmSync(OUT, { recursive: true, force: true });
