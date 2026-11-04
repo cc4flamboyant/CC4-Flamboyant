@@ -142,6 +142,21 @@ async function notificationBadge(img) {
       drawn++;
     }
   }
+  // Logo cheia com o fundo transparente (ex.: um selo redondo): pintar tudo o que não é transparente
+  // daria uma bola branca. Nesse caso o desenho sai do contraste dentro da logo (letras, figuras,
+  // bordas): as partes claras ou as escuras, a que for o desenho.
+  if (transparent && drawn > w * h * 0.5) {
+    const lum = (i) => 0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2];
+    const cut = contrastCut(px, on, lum);
+    if (cut) {
+      drawn = 0;
+      for (let i = 0; i < px.length; i += 4) {
+        const yes = on[i / 4] && (cut.light ? lum(i) > cut.t : lum(i) <= cut.t);
+        on[i / 4] = yes ? 1 : 0;
+        if (yes) drawn++;
+      }
+    }
+  }
   for (let i = 0; i < px.length; i += 4) {
     px[i] = px[i + 1] = px[i + 2] = 255;
     px[i + 3] = on[i / 4] ? 255 : 0;
@@ -150,6 +165,43 @@ async function notificationBadge(img) {
   if (drawn < w * h * 0.02 || drawn > w * h * 0.85) return null;
   ctx.putImageData(data, 0, 0);
   return encode(canvas, 'image/png');
+}
+
+// Divide os pontos da logo em claros e escuros (método de Otsu) e diz qual parte é o desenho:
+// as claras, a não ser que ocupem quase tudo. Sem contraste (logo de uma cor só): null.
+function contrastCut(px, on, lum) {
+  const hist = new Array(256).fill(0);
+  let n = 0;
+  for (let i = 0; i < px.length; i += 4) {
+    if (on[i / 4]) {
+      hist[Math.round(lum(i))]++;
+      n++;
+    }
+  }
+  if (!n) return null;
+  let sum = 0;
+  for (let t = 0; t < 256; t++) sum += t * hist[t];
+  let sB = 0;
+  let wB = 0;
+  let best = 0;
+  let t0 = -1;
+  for (let t = 0; t < 256; t++) {
+    wB += hist[t];
+    if (!wB) continue;
+    const wF = n - wB;
+    if (!wF) break;
+    sB += t * hist[t];
+    const v = wB * wF * (sB / wB - (sum - sB) / wF) ** 2;
+    if (v > best) {
+      best = v;
+      t0 = t;
+    }
+  }
+  // Pouca diferença entre as duas partes: é uma logo de uma cor; o contorno dela já serve.
+  if (t0 < 0 || best / (n * n) < 400) return null;
+  let light = 0;
+  for (let t = t0 + 1; t < 256; t++) light += hist[t];
+  return { t: t0, light: light <= n * 0.75 };
 }
 
 // Galeria: foto grande leve (até ~300 KB; o banco recusa acima de 400 KB) e miniatura para a grade.

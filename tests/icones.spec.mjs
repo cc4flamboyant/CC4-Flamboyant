@@ -1,7 +1,7 @@
 // Ícones gerados da logo da igreja, no próprio navegador (Android).
 import { test, expect } from '@playwright/test';
 
-test('ícone da barra de notificações: o desenho da logo em branco, com o fundo vazio; foto fica com o padrão', async ({ page }) => {
+test('ícone da barra de notificações: o desenho da logo em branco, com o fundo vazio; selo cheio mostra o desenho de dentro; foto fica com o padrão', async ({ page }) => {
   await page.goto('/');
   const result = await page.evaluate(async () => {
     const { makeIconSet } = await import('./js/images.js');
@@ -16,6 +16,16 @@ test('ícone da barra de notificações: o desenho da logo em branco, com o fund
         grad.addColorStop(1, '#c08040');
         g.fillStyle = grad;
         g.fillRect(0, 0, 200, 200);
+        return new Promise((r) => c.toBlob(r, 'image/png'));
+      }
+      if (kind === 'selo') {
+        // Selo redondo e cheio (cantos transparentes), escuro, com um desenho claro no meio.
+        g.fillStyle = '#17365c';
+        g.beginPath();
+        g.arc(100, 100, 98, 0, Math.PI * 2);
+        g.fill();
+        g.fillStyle = '#f2e3b3';
+        g.fillRect(70, 85, 60, 30);
         return new Promise((r) => c.toBlob(r, 'image/png'));
       }
       if (kind === 'branco') {
@@ -34,10 +44,15 @@ test('ícone da barra de notificações: o desenho da logo em branco, com o fund
       const c = Object.assign(document.createElement('canvas'), { width: img.width, height: img.height });
       const g = c.getContext('2d');
       g.drawImage(img, 0, 0);
-      return { size: img.width, center: [...g.getImageData(48, 48, 1, 1).data], corner: [...g.getImageData(10, 10, 1, 1).data] };
+      return {
+        size: img.width,
+        center: [...g.getImageData(48, 48, 1, 1).data],
+        corner: [...g.getImageData(10, 10, 1, 1).data],
+        ring: [...g.getImageData(48, 20, 1, 1).data],
+      };
     };
     const out = {};
-    for (const kind of ['transparente', 'branco', 'foto']) out[kind] = await pixels((await makeIconSet(await draw(kind), '#ffffff'))['badge-96.png']);
+    for (const kind of ['transparente', 'branco', 'foto', 'selo']) out[kind] = await pixels((await makeIconSet(await draw(kind), '#ffffff'))['badge-96.png']);
     return out;
   });
   for (const kind of ['transparente', 'branco']) {
@@ -47,4 +62,9 @@ test('ícone da barra de notificações: o desenho da logo em branco, com o fund
     expect(result[kind].corner[3], kind).toBe(0); // o fundo fica vazio
   }
   expect(result.foto).toBeNull();
+  // Selo cheio: não vira uma bola branca; fica só o desenho claro de dentro.
+  expect(result.selo).not.toBeNull();
+  expect(result.selo.center).toEqual([255, 255, 255, 255]);
+  expect(result.selo.ring[3]).toBe(0);
+  expect(result.selo.corner[3]).toBe(0);
 });

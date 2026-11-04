@@ -1372,6 +1372,18 @@ body.in-chat-room.keyboard-open .tabbar { display: none; }
 .media-viewer { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
 .viewer-zoom { width: 100%; height: 100%; border: 0; border-radius: 0; background: #000; display: grid; place-items: center; }
 .viewer-zoom img { max-height: 100%; width: 100%; height: auto; object-fit: contain; }
+/* Logo do Início em tela cheia: o fundo acompanha o tema (claro: branco; escuro: a cor da instituição). */
+.viewer-themed, .viewer-themed .viewer-zoom { background: #fff; }
+.viewer-themed .viewer-back { background: rgb(0 0 0 / .07); color: #1b1f24; }
+.viewer-themed .viewer-name { color: rgb(27 31 36 / .7); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .viewer-themed, :root:not([data-theme="light"]) .viewer-themed .viewer-zoom { background: var(--church-dark); }
+  :root:not([data-theme="light"]) .viewer-themed .viewer-back { background: rgb(255 255 255 / .16); color: #fff; }
+  :root:not([data-theme="light"]) .viewer-themed .viewer-name { color: rgb(255 255 255 / .8); }
+}
+:root[data-theme="dark"] .viewer-themed, :root[data-theme="dark"] .viewer-themed .viewer-zoom { background: var(--church-dark); }
+:root[data-theme="dark"] .viewer-themed .viewer-back { background: rgb(255 255 255 / .16); color: #fff; }
+:root[data-theme="dark"] .viewer-themed .viewer-name { color: rgb(255 255 255 / .8); }
 /* Visualizador de PDF e de documentos (dentro do app, com Voltar). */
 .doc-viewer { align-items: stretch; flex-direction: column; padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
 .pdf-pages {

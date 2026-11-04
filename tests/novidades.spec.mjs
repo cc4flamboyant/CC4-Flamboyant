@@ -51,6 +51,22 @@ test('Início: a logo grande abre em tela cheia, com Voltar', async ({ page }) =
   await page.getByRole('button', { name: 'Ver a logo' }).click();
   const viewer = page.getByRole('dialog', { name: 'Igreja Teste A' });
   await expect(viewer.locator('#viewer-img')).toBeVisible();
+  // Tema claro: fundo branco.
+  const bg = () => viewer.evaluate((el) => getComputedStyle(el).backgroundColor);
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect.poll(bg).toBe('rgb(255, 255, 255)');
+  // Tema escuro: a cor da instituição (a mesma do fundo do tema escuro com a cor principal).
+  await page.emulateMedia({ colorScheme: 'dark' });
+  const church = await page.evaluate(() => {
+    const t = Object.assign(document.createElement('i'), { style: 'color: var(--church-dark)' });
+    document.body.append(t);
+    const c = getComputedStyle(t).color;
+    t.remove();
+    return c;
+  });
+  expect(church).not.toBe('rgb(255, 255, 255)');
+  await expect.poll(bg).toBe(church);
+  await page.emulateMedia({ colorScheme: 'light' });
   await viewer.getByRole('button', { name: 'Voltar' }).click();
   await expect(viewer).toHaveCount(0);
   // O atalho de Oração está no Início.
@@ -173,6 +189,14 @@ test('oração: o membro pede para todos; a direção aprova; vai para o mural c
   await expect(onWall).toBeVisible();
   await onWall.getByRole('button', { name: /Vou orar/ }).click();
   await expect(onWall.getByRole('button', { name: /Estou orando · 1/ })).toBeVisible();
+  // No carrossel do Início também (os mesmos 30 dias do mural). Quem pediu vê o próprio nome.
+  await page.goto('/i/teste-a/#/');
+  const slide = page.locator('#home-prayers');
+  await expect(slide).toContainText(`${tag} pela prova de matemática`);
+  await expect(slide).toContainText('Membro da A');
+  await expect(slide).toContainText('🙏 1 orando');
+  await slide.getByRole('link', { name: 'Ver o mural de oração' }).click({ force: true });
+  await expect(page.getByRole('heading', { name: 'Pedidos de oração' })).toBeVisible();
 });
 
 test('salas: a semana aparece no cartão; a liderança muda a ordem arrastando', async ({ page }) => {

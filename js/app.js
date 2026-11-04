@@ -1223,7 +1223,7 @@ function viewInvite(m) {
 // A logo grande do Início: tocar abre em tela cheia para ver melhor.
 function bindHeroLogo(c) {
   document.getElementById('hero-logo')?.addEventListener('click', () =>
-    openMediaViewer({ url: new URL(c.logo_url || 'icons/icon-192.png', document.baseURI).href, type: 'image/png', name: c.name }),
+    openMediaViewer({ url: new URL(c.logo_url || 'icons/icon-192.png', document.baseURI).href, type: 'image/png', name: c.name, themed: true }),
   );
 }
 
@@ -1489,6 +1489,7 @@ async function viewChurchHome() {
         <div class="carousel-track">
           <div class="slide" id="home-kids"></div>
           <div class="slide" id="home-notices"></div>
+          <div class="slide" id="home-prayers"></div>
           <div class="slide" id="home-events"></div>
           <div class="slide" id="week-birthdays"></div>
         </div>
@@ -1506,6 +1507,7 @@ async function viewChurchHome() {
   const changed = () => setupCarousel(box);
   if (featureOn('salas')) homeKidsCard(slot('home-kids'), changed).catch(() => {});
   if (featureOn('avisos')) homeNoticesCard(slot('home-notices'), changed).catch(() => {});
+  if (featureOn('oracao')) homePrayersCard(slot('home-prayers'), changed).catch(() => {});
   if (featureOn('agenda')) homeEventsCard(slot('home-events'), changed).catch(() => {});
   if (datesOn()) weekBirthdaysCard(slot('week-birthdays'), changed).catch(() => {});
   pushInvite(document.getElementById('push-invite')).catch(() => {});
@@ -2874,7 +2876,8 @@ async function viewSettings(ctx) {
       let source = logoFile;
       let refresh = false;
       if (!source && c.logo_url) {
-        const iconsUrl = `${CONFIG.SUPABASE_URL}/storage/v1/object/public/igrejas/${c.id}/icons/badge-96.png`;
+        // badge-v2.png marca o ícone da barra feito pela regra nova (logo em selo não vira uma bola branca).
+        const iconsUrl = `${CONFIG.SUPABASE_URL}/storage/v1/object/public/igrejas/${c.id}/icons/badge-v2.png`;
         const needsBadge = await fetch(iconsUrl, { method: 'HEAD', cache: 'no-store' })
           .then((r) => !r.ok)
           .catch(() => false);
@@ -2902,6 +2905,7 @@ async function viewSettings(ctx) {
           const res = await fetch('icons/badge-96.png');
           if (res.ok) icons['badge-96.png'] = await res.blob();
         }
+        if (icons['badge-96.png']) icons['badge-v2.png'] = icons['badge-96.png'];
         for (const [name, blob] of Object.entries(icons)) {
           const up = await bucket.upload(`${c.id}/icons/${name}`, blob, { contentType: 'image/png', cacheControl: '300', upsert: true });
           if (up.error) throw up.error;
@@ -3076,6 +3080,30 @@ function homeEventsCard(el, changed) {
         )
         .join('')}</div>
       <a href="#/agenda">Ver a agenda</a>
+    </section>`;
+  }, changed);
+}
+
+// Pedidos de oração do mural no carrossel do Início: os mais recentes, pelos mesmos 30 dias em que
+// ficam no mural (quem tira os antigos é o banco). Usa o mesmo guardado da tela do mural.
+function homePrayersCard(el, changed) {
+  return homeCard(el, 'mural', loadPrayerWall, (all) => {
+    const rows = (all || []).slice(0, 2);
+    if (!rows.length) return '';
+    return `
+    <section class="card">
+      <h2>${icon.heart} Pedidos de oração</h2>
+      ${rows
+        .map(
+          (p) => `
+        <article class="notice-mini">
+          ${p.answered_at ? '<span class="tag ok">Deus respondeu 🙌</span>' : ''}
+          <p class="pre clamp">${esc(p.body)}</p>
+          <small class="hint">${p.author ? esc(p.author) : 'Pedido anônimo'}${p.praying ? ` · 🙏 ${p.praying} orando` : ''}</small>
+        </article>`,
+        )
+        .join('')}
+      <a href="#/oracao">Ver o mural de oração</a>
     </section>`;
   }, changed);
 }
@@ -6326,11 +6354,12 @@ async function renderPdf(url, box, el) {
   }
 }
 
-function openMediaViewer({ url, type, name }) {
+function openMediaViewer({ url, type, name, themed = false }) {
   closeMediaViewer(false);
   const video = /^video\//.test(type || '');
   const el = document.createElement('div');
-  el.className = 'video-viewer media-viewer';
+  // themed: o fundo acompanha o tema (claro: branco; escuro: a cor da instituição). Usado pela logo do Início.
+  el.className = `video-viewer media-viewer${themed ? ' viewer-themed' : ''}`;
   el.setAttribute('role', 'dialog');
   el.setAttribute('aria-modal', 'true');
   el.setAttribute('aria-label', name || (video ? 'Vídeo' : 'Foto'));
