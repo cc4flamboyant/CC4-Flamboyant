@@ -1160,6 +1160,32 @@ test.describe('Pedidos de oração, ordem das salas e do chat (032)', () => {
   });
 });
 
+test.describe('Ordem dos atalhos do Início (034)', () => {
+  test.afterAll(async () => {
+    await api.patch(rest(`churches?id=eq.${church.a}`), { headers: as['adm-a'].headers, data: { home_order: null } });
+  });
+  test('só o administrador grava a ordem, e só com nomes de atalho', async () => {
+    const order = (who, home_order, c = church.a) =>
+      api.patch(rest(`churches?id=eq.${c}`), { headers: returning(as[who].headers), data: { home_order } });
+    // Membro e líder: a regra não deixa (nenhuma linha muda).
+    for (const who of ['membro-a', 'lider-a']) {
+      const r = await order(who, ['pix']);
+      expect(r.ok() ? await r.json() : []).toEqual([]);
+    }
+    // Administrador de outra instituição: também não.
+    const other = await order('adm-b', ['pix']);
+    expect(other.ok() ? await other.json() : []).toEqual([]);
+    // Valor estranho: o banco recusa.
+    for (const bad of [['<script>'], ['chat:nao-e-id'], Array(61).fill('agenda')]) {
+      expect((await order('adm-a', bad)).ok()).toBe(false);
+    }
+    // O administrador grava.
+    const ok = await order('adm-a', ['oracao', 'agenda', 'chat:00000000-0000-0000-0000-000000000000']);
+    expect(ok.ok(), await ok.text()).toBe(true);
+    expect((await ok.json())[0].home_order).toEqual(['oracao', 'agenda', 'chat:00000000-0000-0000-0000-000000000000']);
+  });
+});
+
 test.describe('Aniversário das crianças no Início (033)', () => {
   const ids = {};
   test.afterAll(async () => {

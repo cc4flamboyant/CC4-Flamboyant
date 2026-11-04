@@ -1234,16 +1234,166 @@ function homeChatTiles() {
   const draw = (groups) => {
     const box = document.getElementById('home-shortcuts');
     if (!box) return;
+    if (box.querySelector('.sorting')) return; // não mexe enquanto o administrador arrasta
     box.querySelectorAll('[data-chat-tile]').forEach((el) => el.remove());
     for (const g of (groups || []).filter((x) => x.show_on_home)) {
       box.insertAdjacentHTML(
         'beforeend',
-        `<a class="shortcut" data-chat-tile href="#/chat/${g.id}">${icon.chat}<span>${esc(g.name)}</span>${g.unread ? `<b class="tile-badge" aria-label="${g.unread} não lidas">${g.unread > 99 ? '99+' : g.unread}</b>` : ''}</a>`,
+        `<a class="shortcut" data-chat-tile data-key="chat:${g.id}" href="#/chat/${g.id}">${icon.chat}<span>${esc(g.name)}</span>${g.unread ? `<b class="tile-badge" aria-label="${g.unread} não lidas">${g.unread > 99 ? '99+' : g.unread}</b>` : ''}</a>`,
       );
     }
+    orderHomeTiles(box);
   };
   draw(screenCached('chat'));
   screenFetch('chat', loadChatGroups).then(draw).catch(() => {});
+}
+
+// Ordem dos atalhos do Início (034): o administrador organiza e vale para todos. Atalho que não
+// está na lista (função ligada depois, grupo novo) vai para o fim, na ordem de sempre.
+function orderHomeTiles(box) {
+  const order = state.church?.home_order;
+  if (!box || !order?.length) return;
+  const pos = (el) => {
+    const i = order.indexOf(el.dataset.key);
+    return i < 0 ? order.length : i;
+  };
+  const tiles = [...box.children];
+  const sorted = tiles.map((el, i) => [el, pos(el), i]).sort((a, b) => a[1] - b[1] || a[2] - b[2]).map(([el]) => el);
+  if (sorted.some((el, i) => el !== tiles[i])) box.append(...sorted);
+}
+
+// Desliza um elemento de onde estava (dx, dy) até onde está agora (grade).
+function slideFrom2D(el, dx, dy) {
+  if ((!dx && !dy) || calm()) return;
+  el.dataset.sliding = '1';
+  el.style.transition = 'none';
+  el.style.transform = `translate(${dx}px, ${dy}px)`;
+  void el.offsetHeight;
+  el.style.transition = 'transform .24s cubic-bezier(.2, .8, .2, 1)';
+  el.style.transform = '';
+  const done = () => {
+    delete el.dataset.sliding;
+    el.style.transition = '';
+  };
+  el.addEventListener('transitionend', done, { once: true });
+  setTimeout(done, 300);
+}
+
+// Organizar uma grade arrastando (atalhos do Início), com o mesmo jeito da lista do chat:
+// o atalho levanta ao pegar, os outros deslizam para abrir espaço e ele pousa ao soltar.
+// Só funciona com a grade em modo "organizando"; fora dele, os atalhos abrem normalmente.
+function sortableGrid(box, onDrop) {
+  const tiles = () => [...box.children].filter((el) => el.dataset.key);
+  const keys = () => tiles().map((el) => el.dataset.key);
+  // Move um atalho para antes/depois de outro, com os outros deslizando.
+  const moveTile = (item, target, after) => {
+    const before = new Map(tiles().map((el) => [el, el.getBoundingClientRect()]));
+    box.insertBefore(item, after ? target.nextElementSibling : target);
+    for (const [el, r] of before) {
+      if (el === item) continue;
+      const n = el.getBoundingClientRect();
+      slideFrom2D(el, r.left - n.left, r.top - n.top);
+    }
+    return before.get(item);
+  };
+  box.addEventListener('pointerdown', (e) => {
+    const item = e.target.closest('.shortcut[data-key]');
+    if (!box.classList.contains('organizing') || !item || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    e.preventDefault();
+    const first = keys().join();
+    let sx = e.clientX;
+    let sy = e.clientY;
+    let dx = 0;
+    let dy = 0;
+    item.style.transition = '';
+    item.classList.add('sorting');
+    document.documentElement.classList.add('sorting-now');
+    navigator.vibrate?.(8);
+    const place = () => (item.style.transform = `translate(${dx}px, ${dy}px) scale(${calm() ? 1 : 1.06})`);
+    place();
+    const move = (ev) => {
+      dx = ev.clientX - sx;
+      dy = ev.clientY - sy;
+      // O atalho embaixo do dedo (o que está sendo arrastado não conta: pointer-events none).
+      const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.shortcut[data-key]');
+      if (target && target !== item && target.parentElement === box && !target.dataset.sliding) {
+        const list = tiles();
+        const after = list.indexOf(target) > list.indexOf(item);
+        const old = moveTile(item, target, after);
+        const now = item.getBoundingClientRect();
+        // O lugar novo vira o ponto de partida: o atalho continua embaixo do dedo.
+        sx += now.left - old.left;
+        sy += now.top - old.top;
+        dx = ev.clientX - sx;
+        dy = ev.clientY - sy;
+        navigator.vibrate?.(4);
+      }
+      place();
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      document.documentElement.classList.remove('sorting-now');
+      item.classList.remove('sorting');
+      item.classList.add('settling');
+      item.style.transition = calm() ? 'none' : 'transform .24s cubic-bezier(.2, .8, .2, 1)';
+      item.style.transform = '';
+      setTimeout(() => {
+        item.classList.remove('settling');
+        item.style.transition = '';
+      }, 260);
+      if (keys().join() !== first) onDrop(keys());
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  });
+  // Organizando, tocar no atalho não abre a tela.
+  box.addEventListener('click', (e) => box.classList.contains('organizing') && e.preventDefault(), true);
+  // Teclado: setas mudam o atalho de lugar.
+  box.addEventListener('keydown', (e) => {
+    const item = e.target.closest('.shortcut[data-key]');
+    if (!box.classList.contains('organizing') || !item) return;
+    const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    const list = tiles();
+    const target = list[list.indexOf(item) + step];
+    if (!target) return;
+    const old = moveTile(item, target, step > 0);
+    const now = item.getBoundingClientRect();
+    slideFrom2D(item, old.left - now.left, old.top - now.top);
+    item.focus();
+    onDrop(keys());
+  });
+}
+
+// Botão "Organizar atalhos" do administrador: liga o modo de arrastar e salva cada mudança.
+function bindHomeOrganize(c) {
+  const btn = document.getElementById('home-organize');
+  const box = document.getElementById('home-shortcuts');
+  if (!btn || !box) return;
+  const hint = document.getElementById('home-organize-hint');
+  btn.onclick = () => {
+    const on = box.classList.toggle('organizing');
+    btn.innerHTML = on ? 'Pronto' : `${icon.grip} Organizar atalhos`;
+    btn.classList.toggle('primary', on);
+    hint.hidden = !on;
+    if (on) navigator.vibrate?.(8);
+  };
+  let saving = Promise.resolve();
+  sortableGrid(box, (keys) => {
+    // Os atalhos que o administrador não vê (grupos de que não participa) continuam na lista.
+    const hidden = (c.home_order || []).filter((k) => !keys.includes(k));
+    const order = [...keys, ...hidden];
+    c.home_order = order;
+    saveBootCache();
+    saving = saving.then(async () => {
+      const { error } = await sb.from('churches').update({ home_order: order }).eq('id', c.id);
+      if (error) toast('Não deu para salvar a ordem. Tente de novo.', 'error');
+    });
+  });
 }
 
 async function viewChurchHome() {
@@ -1304,12 +1454,20 @@ async function viewChurchHome() {
       ${
         shortcuts.length
           ? `<div class="shortcuts" id="home-shortcuts">${shortcuts
-              .map(([, ic, label, href]) =>
+              .map(([k, ic, label, href]) =>
                 href
-                  ? `<a class="shortcut" href="${href}">${ic}<span>${label}</span></a>`
-                  : `<div class="shortcut soon">${ic}<span>${label}</span><small>Em breve</small></div>`,
+                  ? `<a class="shortcut" data-key="${k}" href="${href}">${ic}<span>${label}</span></a>`
+                  : `<div class="shortcut soon" data-key="${k}">${ic}<span>${label}</span><small>Em breve</small></div>`,
               )
               .join('')}</div>`
+          : ''
+      }
+      ${
+        shortcuts.length && myRole() === 'admin' && 'home_order' in c
+          ? `<div class="organize-bar">
+              <p class="hint" id="home-organize-hint" hidden>Arraste os atalhos para mudar a ordem. Vale para todos.</p>
+              <button type="button" class="btn small" id="home-organize">${icon.grip} Organizar atalhos</button>
+            </div>`
           : ''
       }
       <div class="carousel" id="home-carousel" hidden>
@@ -1325,7 +1483,9 @@ async function viewChurchHome() {
       ${aboutCard(c)}
     </div>`;
   bindHeroLogo(c);
+  orderHomeTiles(document.getElementById('home-shortcuts'));
   homeChatTiles();
+  bindHomeOrganize(c);
   const slot = (id) => document.getElementById(id);
   const box = slot('home-carousel');
   const changed = () => setupCarousel(box);

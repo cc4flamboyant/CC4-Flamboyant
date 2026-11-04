@@ -320,6 +320,18 @@ legend { font-weight: 700; padding: 0 4px; }
 .grip:focus-visible { outline: 2px solid var(--brand); }
 .week-tag { display: inline-block; width: max-content; margin: 2px 0; }
 .shortcut small { color: var(--muted); font-weight: 400; }
+/* Organizar os atalhos do Início (administrador): mesmo jeito da lista do chat. */
+.shortcut { transition: box-shadow .22s ease, border-color .22s ease; }
+.shortcuts.organizing .shortcut { border-style: dashed; border-color: var(--brand); cursor: grab; touch-action: none; -webkit-touch-callout: none; }
+.shortcuts.organizing .shortcut::after {
+  content: ''; position: absolute; top: 8px; left: 8px; width: 14px; height: 10px;
+  border-top: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+  background: linear-gradient(var(--muted), var(--muted)) center / 100% 2px no-repeat;
+}
+.shortcuts .shortcut.sorting { z-index: 3; pointer-events: none; border-style: solid; box-shadow: 0 14px 30px rgb(0 0 0 / .22); }
+.shortcuts .shortcut.settling { z-index: 3; }
+.organize-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin: -6px 0 16px; }
+.organize-bar .hint { flex: 1 1 200px; margin: 0; }
 .shortcut.soon { opacity: .75; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: var(--brand-soft); text-decoration: none; font-weight: 600; font-size: .9rem; }

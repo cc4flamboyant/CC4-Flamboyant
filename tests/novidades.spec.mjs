@@ -31,6 +31,7 @@ test.afterAll(async () => {
   if (ids.kid) await api.delete(rest(`children?id=eq.${ids.kid}`), { headers: as['membro-a'].headers });
   for (const r of [ids.r1, ids.r2].filter(Boolean)) await api.delete(rest(`kids_rooms?id=eq.${r}`), { headers: as['adm-a'].headers });
   for (const g of [ids.g1, ids.g2].filter(Boolean)) await api.delete(rest(`chat_groups?id=eq.${g}`), { headers: as['lider-a'].headers });
+  await api.patch(rest(`churches?id=eq.${ids.church}`), { headers: as['adm-a'].headers, data: { home_order: null } });
   await api.dispose();
 });
 
@@ -53,6 +54,44 @@ test('Início: a logo grande abre em tela cheia, com Voltar', async ({ page }) =
   await expect(viewer).toHaveCount(0);
   // O atalho de Oração está no Início.
   await expect(page.locator('#home-shortcuts').getByRole('link', { name: 'Oração' })).toBeVisible();
+});
+
+test('Início: o administrador organiza os atalhos arrastando, e vale para todos (034)', async ({ page, browser }) => {
+  await api.patch(rest(`churches?id=eq.${ids.church}`), { headers: as['adm-a'].headers, data: { home_order: null } });
+  await openLoggedIn(page, as['adm-a'].session, '/i/teste-a/#/');
+  const box = page.locator('#home-shortcuts');
+  const tile = (name) => box.locator('.shortcut', { hasText: name }).first();
+  await expect(tile('Oração')).toBeVisible();
+  await expect(box.locator('.shortcut').first()).toContainText('Agenda');
+  await page.getByRole('button', { name: 'Organizar atalhos' }).click();
+  await expect(page.getByText('Arraste os atalhos para mudar a ordem. Vale para todos.')).toBeVisible();
+  // Organizando, tocar no atalho não abre a tela.
+  await tile('Avisos').click();
+  await expect(page).toHaveURL(/#\/$/);
+  // Arrasta "Oração" até o lugar da "Agenda" (o primeiro).
+  await expect(async () => {
+    const a = await tile('Oração').boundingBox();
+    const b = await tile('Agenda').boundingBox();
+    await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(b.x + b.width / 3, b.y + b.height / 2, { steps: 16 });
+    await page.waitForTimeout(350);
+    await page.mouse.up();
+    await expect(box.locator('.shortcut').first()).toContainText('Oração', { timeout: 1000 });
+  }).toPass({ timeout: 15000 });
+  await page.getByRole('button', { name: 'Pronto' }).click();
+  await expect(page.getByRole('button', { name: 'Organizar atalhos' })).toBeVisible();
+  // Salvou no banco…
+  await expect
+    .poll(async () => (await (await api.get(rest(`churches?select=home_order&id=eq.${ids.church}`), { headers: as['adm-a'].headers })).json())[0].home_order?.[0])
+    .toBe('oracao');
+  // …e o membro vê na mesma ordem (sem o botão de organizar).
+  const ctx = await browser.newContext({ ...test.info().project.use, baseURL: 'http://localhost:4173/' });
+  const member = await ctx.newPage();
+  await openLoggedIn(member, as['membro-a'].session, '/i/teste-a/#/');
+  await expect(member.locator('#home-shortcuts .shortcut').first()).toContainText('Oração');
+  await expect(member.getByRole('button', { name: 'Organizar atalhos' })).toHaveCount(0);
+  await ctx.close();
 });
 
 test('Início: o aniversário do filho aparece no cartão da semana (033)', async ({ page }) => {
