@@ -46,6 +46,40 @@ async function dragOnto(page, grip, target) {
   await page.mouse.up();
 }
 
+test.describe('com o service worker', () => {
+  test.use({ serviceWorkers: 'allow' });
+test('notificação de teste aparece mesmo com o app aberto na tela Notificações', async ({ page, context }) => {
+  await openLoggedIn(page, as['membro-a'].session, '/i/teste-a/#/notificacoes');
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller), { timeout: 15000 }).toBe(true);
+  // Entrega uma mensagem ao service worker como o servidor de push faria.
+  const cdp = await context.newCDPSession(page);
+  const regs = [];
+  cdp.on('ServiceWorker.workerRegistrationUpdated', (e) => regs.push(...e.registrations));
+  await cdp.send('ServiceWorker.enable');
+  await expect.poll(() => regs.length).toBeGreaterThan(0);
+  const scope = await page.evaluate(() => navigator.serviceWorker.ready.then((r) => r.scope));
+  const reg = regs.find((r) => r.scopeURL === scope && !r.isDeleted);
+  const deliver = (data) =>
+    cdp.send('ServiceWorker.deliverPushMessage', { origin: new URL(page.url()).origin, registrationId: reg.registrationId, data: JSON.stringify(data) });
+  // O Chrome de teste (sem tela) não mostra notificações: o teste anota o que o service worker manda mostrar.
+  await expect.poll(() => context.serviceWorkers().length).toBeGreaterThan(0);
+  const sw = context.serviceWorkers().find((w) => w.url().endsWith('sw.js'));
+  await sw.evaluate(() => {
+    self.__shown = [];
+    self.registration.showNotification = (title) => (self.__shown.push(title), Promise.resolve());
+  });
+  const shown = () => sw.evaluate(() => self.__shown);
+  const here = page.url();
+  // Uma mensagem comum para a tela que a pessoa está vendo não aparece (como no chat aberto)…
+  await deliver({ title: 'Mensagem comum', url: here });
+  // …mas o aviso de teste aparece sempre.
+  await deliver({ title: 'Aviso de teste', url: here, tag: 'teste' });
+  await expect.poll(shown, { timeout: 10000 }).toContain('Aviso de teste');
+  expect(await shown()).not.toContain('Mensagem comum');
+});
+});
+
 test('Início: a logo grande abre em tela cheia, com Voltar', async ({ page }) => {
   await openLoggedIn(page, as['membro-a'].session, '/i/teste-a/#/');
   await page.getByRole('button', { name: 'Ver a logo' }).click();

@@ -7,7 +7,7 @@
 // Esse cache (FOTOS) passa de uma versão para outra e é apagado ao sair da conta (js/app.js).
 // O build (scripts/build-site.mjs) acrescenta ao nome do cache um código do conteúdo do app:
 // qualquer mudança de código gera uma versão nova sozinha.
-const CACHE = 'cc4-v60';
+const CACHE = 'cc4-v61';
 const ANDROID = /android/i.test(self.navigator.userAgent);
 const FOTOS = 'cc4-fotos';
 const FOTOS_MAX = 400; // as mais antigas saem
@@ -130,7 +130,8 @@ self.addEventListener('push', (e) => {
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
       // App aberto: atualiza o sininho e o chat.
       wins.forEach((w) => w.postMessage({ type: 'push', url: msg.url || '' }));
-      const viewing = msg.url && wins.some((w) => w.focused && w.visibilityState === 'visible' && w.url === msg.url);
+      // O aviso de teste sempre aparece: o botão fica na própria tela para onde ele leva.
+      const viewing = msg.tag !== 'teste' && msg.url && wins.some((w) => w.focused && w.visibilityState === 'visible' && w.url === msg.url);
       if (viewing) return;
       return self.registration.showNotification(msg.title || 'CC4', {
         body: msg.body || '',
