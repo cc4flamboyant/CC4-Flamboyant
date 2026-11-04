@@ -1160,6 +1160,39 @@ test.describe('Pedidos de oração, ordem das salas e do chat (032)', () => {
   });
 });
 
+test.describe('Liderança vincula a criança ao responsável (036)', () => {
+  test('só a liderança troca o responsável, e só por alguém da mesma instituição', async () => {
+    const [{ id: pai }] = await get('adm-a', `members?select=id&church_id=eq.${church.a}&user_id=eq.${as['membro-a'].id}`);
+    const [{ id: lider }] = await get('adm-a', `members?select=id&church_id=eq.${church.a}&user_id=eq.${as['lider-a'].id}`);
+    const [{ id: deFora }] = await get('adm-b', `members?select=id&church_id=eq.${church.b}&limit=1`);
+    const made = await api.post(rest('children'), {
+      headers: returning(as['lider-a'].headers),
+      data: { church_id: church.a, name: `Vínculo ${Date.now()}`, guardian_member_id: pai },
+    });
+    expect(made.ok(), await made.text()).toBe(true);
+    const [{ id }] = await made.json();
+    const change = (who, data) => api.patch(rest(`children?id=eq.${id}`), { headers: returning(as[who].headers), data });
+    try {
+      // O pai vê o filho.
+      expect(await get('membro-a', `children?select=id&id=eq.${id}`)).toHaveLength(1);
+      // O pai não passa a criança para outra pessoa.
+      expect((await change('membro-a', { guardian_member_id: lider })).ok()).toBe(false);
+      // Ninguém liga a criança a alguém de outra instituição.
+      expect((await change('lider-a', { guardian_member_id: deFora })).ok()).toBe(false);
+      // A liderança troca para um responsável sem o app: o pai deixa de ver.
+      const desk = await change('lider-a', { guardian_member_id: null, guardian_name: 'Avó' });
+      expect(desk.ok(), await desk.text()).toBe(true);
+      expect(await get('membro-a', `children?select=id&id=eq.${id}`)).toEqual([]);
+      // E liga de volta ao pai.
+      const back = await change('lider-a', { guardian_member_id: pai, guardian_name: null });
+      expect(back.ok(), await back.text()).toBe(true);
+      expect(await get('membro-a', `children?select=id&id=eq.${id}`)).toHaveLength(1);
+    } finally {
+      await api.delete(rest(`children?id=eq.${id}`), { headers: as['lider-a'].headers });
+    }
+  });
+});
+
 test.describe('Ícone do grupo no Início (035)', () => {
   test('o banco só aceita ícones da lista', async () => {
     const made = await rpc('lider-a', 'chat_create_group', { p_church: church.a, p_name: `Ícone ${Date.now()}`, p_description: null, p_locked: false, p_members: [] });

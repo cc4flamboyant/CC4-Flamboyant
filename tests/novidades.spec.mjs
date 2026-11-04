@@ -29,6 +29,7 @@ test.afterAll(async () => {
   if (!api) return;
   await api.delete(rest(`prayer_requests?body=like.*${encodeURIComponent(tag)}*`), { headers: as['adm-a'].headers });
   if (ids.kid) await api.delete(rest(`children?id=eq.${ids.kid}`), { headers: as['membro-a'].headers });
+  await api.delete(rest(`children?church_id=eq.${ids.church}&name=like.*${encodeURIComponent(tag)}*`), { headers: as['lider-a'].headers });
   for (const r of [ids.r1, ids.r2].filter(Boolean)) await api.delete(rest(`kids_rooms?id=eq.${r}`), { headers: as['adm-a'].headers });
   for (const g of [ids.g1, ids.g2].filter(Boolean)) await api.delete(rest(`chat_groups?id=eq.${g}`), { headers: as['lider-a'].headers });
   await api.patch(rest(`churches?id=eq.${ids.church}`), { headers: as['adm-a'].headers, data: { home_order: null } });
@@ -91,6 +92,40 @@ test('Início: o administrador organiza os atalhos arrastando, e vale para todos
   await openLoggedIn(member, as['membro-a'].session, '/i/teste-a/#/');
   await expect(member.locator('#home-shortcuts .shortcut').first()).toContainText('Oração');
   await expect(member.getByRole('button', { name: 'Organizar atalhos' })).toHaveCount(0);
+  await ctx.close();
+});
+
+test('a liderança cadastra a criança ligada ao pai do cadastro; depois troca o responsável (036)', async ({ page, browser }) => {
+  const kid = `${tag} Bia`;
+  await openLoggedIn(page, as['lider-a'].session, '/i/teste-a/#/salas/crianca/nova');
+  await page.getByLabel('Nome da criança').fill(kid);
+  await page.getByLabel('Data de nascimento').fill('2019-05-10');
+  // Padrão: pai ou mãe do cadastro, com busca pelo nome.
+  await expect(page.getByRole('radio', { name: 'Pai ou mãe do cadastro' })).toBeChecked();
+  await expect(page.getByLabel('Nome do responsável')).toBeHidden();
+  await page.getByLabel('Buscar pelo nome').fill('Membro da A');
+  await expect(page.getByRole('combobox', { name: 'Pai ou mãe' })).toHaveValue(/[0-9a-f-]{36}/);
+  await page.getByLabel(/O responsável autorizou/).check();
+  await page.getByRole('button', { name: 'Cadastrar' }).click();
+  await expect(page.locator('#toast')).toHaveText('Criança cadastrada.');
+
+  // O pai vê a criança em "Meus filhos".
+  const ctx = await browser.newContext({ ...test.info().project.use, baseURL: 'http://localhost:4173/' });
+  const member = await ctx.newPage();
+  await openLoggedIn(member, as['membro-a'].session, '/i/teste-a/#/filhos');
+  await expect(member.locator('.page')).toContainText(kid);
+
+  // A liderança troca para um responsável sem o app: o pai deixa de ver.
+  await page.goto('/i/teste-a/#/salas/criancas');
+  await page.getByRole('link', { name: new RegExp(kid) }).click();
+  await expect(page.getByRole('combobox', { name: 'Pai ou mãe' })).toHaveValue(/[0-9a-f-]{36}/);
+  await page.getByText('Não usa o app').click();
+  await page.getByLabel('Nome do responsável').fill('Avó da Bia');
+  await page.getByRole('button', { name: 'Salvar' }).click();
+  await expect(page.locator('#toast')).toHaveText('Salvo.');
+  await member.reload();
+  await expect(member.getByRole('heading', { name: 'Meus filhos' })).toBeVisible();
+  await expect(member.locator('.page')).not.toContainText(kid);
   await ctx.close();
 });
 

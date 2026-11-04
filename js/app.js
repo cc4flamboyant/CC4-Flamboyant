@@ -4048,7 +4048,9 @@ async function viewChildForm(ctx, id) {
   }
   const rooms = team ? screenCached('salas') || [] : [];
   if (!ctx.alive()) return;
-  const desk = team && !c.guardian_member_id && (!id || c.guardian_name);
+  // Liderança: o responsável é o pai ou a mãe do cadastro (vê a criança em "Meus filhos")
+  // ou alguém sem o app (nome e WhatsApp). Pode trocar depois, ao editar (036).
+  const startMode = c.guardian_member_id || !id ? 'app' : 'desk';
   $view.innerHTML = `
     <form id="child" class="form page">
       <a href="#${back}" class="back">${icon.back} ${team ? 'Crianças' : 'Meus filhos'}</a>
@@ -4058,12 +4060,28 @@ async function viewChildForm(ctx, id) {
       <label>Alergias e cuidados (opcional)<textarea name="care_notes" rows="2" maxlength="300" placeholder="Ex.: alergia a amendoim; usa bombinha">${esc(c.care_notes || '')}</textarea>
         <small class="hint">Aparece com ⚠️ para o tutor da sala.</small></label>
       ${
-        desk
-          ? `<label>Nome do responsável<input name="guardian_name" required minlength="2" maxlength="120" value="${esc(c.guardian_name || '')}"></label>
-             <label>WhatsApp do responsável<input name="guardian_phone" type="tel" inputmode="tel" value="${c.guardian_phone ? esc(fmtPhone(c.guardian_phone)) : ''}" placeholder="(61) 99999-0000"></label>`
-          : team && id
-            ? '<p class="hint">O responsável usa o app: só ele muda os dados de contato.</p>'
-            : ''
+        team
+          ? `<fieldset class="guardian-box">
+              <legend>Responsável</legend>
+              <div class="seg" role="radiogroup" aria-label="Responsável">
+                <label><input type="radio" name="guardian_mode" value="app" ${startMode === 'app' ? 'checked' : ''}><span>Pai ou mãe do cadastro</span></label>
+                <label><input type="radio" name="guardian_mode" value="desk" ${startMode === 'desk' ? 'checked' : ''}><span>Não usa o app</span></label>
+              </div>
+              <div id="g-app" ${startMode === 'app' ? '' : 'hidden'}>
+                <label>Buscar pelo nome<input type="search" id="guardian-search" placeholder="Digite o nome do pai ou da mãe" autocomplete="off"></label>
+                <label>Pai ou mãe
+                  <select name="guardian_member_id">
+                    <option value="">Carregando o cadastro…</option>
+                  </select>
+                </label>
+                <small class="hint">Ele vê a criança em <em>Meus filhos</em> e recebe os avisos da sala.</small>
+              </div>
+              <div id="g-desk" ${startMode === 'desk' ? '' : 'hidden'}>
+                <label>Nome do responsável<input name="guardian_name" minlength="2" maxlength="120" value="${esc(c.guardian_name || '')}"></label>
+                <label>WhatsApp do responsável<input name="guardian_phone" type="tel" inputmode="tel" value="${c.guardian_phone ? esc(fmtPhone(c.guardian_phone)) : ''}" placeholder="(61) 99999-0000"></label>
+              </div>
+            </fieldset>`
+          : ''
       }
       ${
         team
@@ -4101,6 +4119,36 @@ async function viewChildForm(ctx, id) {
     screenForget('criancas');
     screenForget('salas');
   };
+  // Responsável (liderança): troca entre "do cadastro" e "sem o app"; a lista vem do cadastro de membros.
+  const mode = () => form.querySelector('[name="guardian_mode"]:checked')?.value;
+  if (team) {
+    form.querySelectorAll('[name="guardian_mode"]').forEach(
+      (r) =>
+        (r.onchange = () => {
+          document.getElementById('g-app').hidden = mode() !== 'app';
+          document.getElementById('g-desk').hidden = mode() !== 'desk';
+        }),
+    );
+    let people = [];
+    const sel = form.guardian_member_id;
+    const fill = () => {
+      const term = fold(document.getElementById('guardian-search').value.trim());
+      const cur = sel.value || c.guardian_member_id || '';
+      const list = people.filter((m) => m.id === cur || !term || fold(m.name).includes(term));
+      sel.innerHTML =
+        `<option value="">${list.length ? 'Escolha o pai ou a mãe' : 'Ninguém com esse nome'}</option>` +
+        list.map((m) => `<option value="${m.id}" ${m.id === cur ? 'selected' : ''}>${esc(m.name)}${m.user_id ? '' : ' (ainda não entrou no app)'}</option>`).join('');
+      // Um nome só na busca: já fica escolhido.
+      if (term && list.length === 1) sel.value = list[0].id;
+    };
+    const show = (ms) => {
+      people = ms.filter((m) => m.status === 'ativo' || m.id === c.guardian_member_id);
+      if (form.isConnected) fill();
+    };
+    if (membersCache.has(state.church.id)) show(membersCache.get(state.church.id));
+    fetchMembers(state.church.id).then(show).catch(() => {});
+    document.getElementById('guardian-search').addEventListener('input', fill);
+  }
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const row = {
@@ -4108,10 +4156,17 @@ async function viewChildForm(ctx, id) {
       birth_date: form.birth_date.value || null,
       care_notes: form.care_notes.value.trim() || null,
     };
-    if (desk) {
+    if (team && mode() === 'app') {
+      const who = form.guardian_member_id.value;
+      if (!who) return toast('Escolha o pai ou a mãe no cadastro.', 'error');
+      // Ligada ao cadastro: o contato vem do cadastro do responsável.
+      if (who !== c.guardian_member_id) Object.assign(row, { guardian_member_id: who, ...(id ? { guardian_name: null, guardian_phone: null } : {}) });
+    } else if (team) {
+      const name = form.guardian_name.value.trim();
+      if (name.length < 2) return toast('Escreva o nome do responsável.', 'error');
       const phone = form.guardian_phone.value.trim() ? normalizePhone(form.guardian_phone.value) : null;
       if (form.guardian_phone.value.trim() && !phone) return toast('WhatsApp inválido. Use DDD + número.', 'error');
-      Object.assign(row, { guardian_name: form.guardian_name.value.trim(), guardian_phone: phone });
+      Object.assign(row, { guardian_name: name, guardian_phone: phone, ...(c.guardian_member_id ? { guardian_member_id: null } : {}) });
     }
     const btn = form.querySelector('button.primary');
     btn.disabled = true;

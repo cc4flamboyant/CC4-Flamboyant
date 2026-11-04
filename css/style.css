@@ -330,6 +330,20 @@ legend { font-weight: 700; padding: 0 4px; }
 }
 .shortcuts .shortcut.sorting { z-index: 3; pointer-events: none; border-style: solid; box-shadow: 0 14px 30px rgb(0 0 0 / .22); }
 .shortcuts .shortcut.settling { z-index: 3; }
+/* Responsável da criança (liderança): escolha entre "do cadastro" e "sem o app". */
+.guardian-box { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 12px; }
+.guardian-box legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
+.guardian-box > div { display: grid; gap: 12px; }
+.guardian-box > div[hidden] { display: none; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 12px; background: var(--line); }
+.seg label { position: relative; margin: 0; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg span {
+  display: grid; place-items: center; min-height: 44px; padding: 6px 8px; border-radius: 9px; text-align: center;
+  font-weight: 600; font-size: .92rem; color: var(--muted); cursor: pointer; transition: background .15s, color .15s, box-shadow .15s;
+}
+.seg input:checked + span { background: var(--surface); color: var(--ink); box-shadow: 0 1px 4px rgb(0 0 0 / .12); }
+.seg input:focus-visible + span { outline: 2px solid var(--brand); outline-offset: 1px; }
 /* Ícone do atalho do grupo (Editar grupo). */
 .icon-choice { border: 0; padding: 0; margin: 0; min-width: 0; }
 .icon-choice legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
