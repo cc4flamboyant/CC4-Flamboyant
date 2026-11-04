@@ -28,6 +28,7 @@ test.beforeAll(async ({ playwright }) => {
 test.afterAll(async () => {
   if (!api) return;
   await api.delete(rest(`prayer_requests?body=like.*${encodeURIComponent(tag)}*`), { headers: as['adm-a'].headers });
+  if (ids.kid) await api.delete(rest(`children?id=eq.${ids.kid}`), { headers: as['membro-a'].headers });
   for (const r of [ids.r1, ids.r2].filter(Boolean)) await api.delete(rest(`kids_rooms?id=eq.${r}`), { headers: as['adm-a'].headers });
   for (const g of [ids.g1, ids.g2].filter(Boolean)) await api.delete(rest(`chat_groups?id=eq.${g}`), { headers: as['lider-a'].headers });
   await api.dispose();
@@ -52,6 +53,23 @@ test('Início: a logo grande abre em tela cheia, com Voltar', async ({ page }) =
   await expect(viewer).toHaveCount(0);
   // O atalho de Oração está no Início.
   await expect(page.locator('#home-shortcuts').getByRole('link', { name: 'Oração' })).toBeVisible();
+});
+
+test('Início: o aniversário do filho aparece no cartão da semana (033)', async ({ page }) => {
+  const [{ id: membro }] = await (await api.get(rest(`members?select=id&church_id=eq.${ids.church}&user_id=eq.${as['membro-a'].id}`), { headers: as['adm-a'].headers })).json();
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+  const md = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const kidName = `${tag} Lia`;
+  const kid = await api.post(rest('children'), {
+    headers: returning(as['membro-a'].headers),
+    data: { church_id: ids.church, name: kidName, birth_date: `2018-${md === '02-29' ? '02-28' : md}`, guardian_member_id: membro },
+  });
+  ids.kid = (await kid.json())[0].id;
+  await openLoggedIn(page, as['membro-a'].session, '/i/teste-a/#/');
+  const item = page.locator('#week-birthdays .bday-list li', { hasText: kidName });
+  await expect(item).toBeVisible({ timeout: 15000 });
+  await expect(item).toContainText('Hoje');
+  await expect(item).toContainText(`faz ${now.getFullYear() - 2018} anos`);
 });
 
 test('oração: o membro pede para todos; a direção aprova; vai para o mural com "Vou orar"', async ({ page, browser }) => {

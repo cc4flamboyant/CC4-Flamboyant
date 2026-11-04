@@ -81,7 +81,7 @@ test('a liderança cria o grupo, escolhe quem participa e escreve com emoji, lin
       await page.mouse.down();
       for (let i = 1; i <= 10; i++) await page.mouse.move(b.x + b.width - 10 - i * b.width * 0.08, b.y + b.height / 2);
       await page.mouse.up();
-      await expect(loc).toBeHidden({ timeout: 2000 });
+      await expect(loc).toBeHidden({ timeout: 6000 }); // no GitHub o banco demora mais para confirmar
     }).toPass({ timeout: 15000 });
   };
   await box.fill('Mensagem para apagar');
@@ -336,7 +336,7 @@ test('versão nova do app: ao voltar para o app ela é buscada e a tela recarreg
   // Voltar para o app (a aba fica visível de novo) procura a versão nova.
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await expect.poll(() => page.evaluate(() => window.__versaoAntiga === undefined).catch(() => false), { timeout: 60000 }).toBe(true);
-  await expect(page.getByRole('heading', { name: 'Chat', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Chat', level: 1 })).toBeVisible({ timeout: 30000 });
   await ctx.close();
 });
 

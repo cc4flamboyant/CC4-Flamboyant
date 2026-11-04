@@ -7329,7 +7329,12 @@ const parseIso = (s) => {
 
 // "faz 30 anos", "💍 Casamento · 10 anos", "🕊️ Batismo" (os anos só para a liderança).
 function celebrationNote(r, sep = '') {
-  if (r.kind === 'aniversario') return r.years ? `${sep}faz ${r.years} anos` : '';
+  if (r.kind === 'aniversario') {
+    // Criança (033): a sala dela ao lado (o nome da sala vem escapado: entra no HTML).
+    const kid = r.child ? (r.room_name ? `Sala ${esc(r.room_name)}` : 'Criança') : '';
+    const parts = [r.years ? `faz ${r.years} anos` : '', kid].filter(Boolean);
+    return parts.length ? sep + parts.join(' · ') : '';
+  }
   const k = MESSAGE_KINDS[r.kind];
   return `${sep}${k.emoji} ${k.label}${r.years ? ` · ${yearsText(r.years)}` : ''}`;
 }
@@ -7344,10 +7349,22 @@ function dayLabel(iso) {
 // A regra de quem aparece fica no banco: liderança vê todos (com a idade e os anos); membros, só quem autorizou.
 // Cada linha tem o tipo: aniversario, casamento ou batismo.
 async function fetchBirthdays(from, to) {
-  const { data, error } = await sb.rpc('celebrations_between', { p_church: state.church.id, p_from: from, p_to: to });
+  const [{ data, error }, kids] = await Promise.all([
+    sb.rpc('celebrations_between', { p_church: state.church.id, p_from: from, p_to: to }),
+    // As crianças (033) que a pessoa pode ver: os filhos, as da sala do tutor, todas para a liderança.
+    // Se falhar, os membros aparecem do mesmo jeito.
+    featureOn('salas')
+      ? sb.rpc('kids_birthdays_between', { p_church: state.church.id, p_from: from, p_to: to }).then((r) => r.data || [], () => [])
+      : Promise.resolve([]),
+  ]);
   if (error) throw error;
   // O CC4 só usa o aniversário: casamento e batismo (que o banco ainda conhece) ficam de fora.
-  return data.filter((r) => MESSAGE_KINDS[r.kind]);
+  const members = data.filter((r) => MESSAGE_KINDS[r.kind]);
+  const children = kids.map((k) => ({
+    member_id: null, child_id: k.child_id, child: true, name: k.name, kind: 'aniversario',
+    on_date: k.on_date, photo_path: null, years: k.years, room_name: k.room_name,
+  }));
+  return [...members, ...children].sort((a, b) => a.on_date.localeCompare(b.on_date) || a.name.localeCompare(b.name, 'pt-BR'));
 }
 
 function weekBirthdaysCard(el, changed) {

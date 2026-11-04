@@ -1160,6 +1160,39 @@ test.describe('Pedidos de oração, ordem das salas e do chat (032)', () => {
   });
 });
 
+test.describe('Aniversário das crianças no Início (033)', () => {
+  const ids = {};
+  test.afterAll(async () => {
+    if (ids.kid) await api.delete(rest(`children?id=eq.${ids.kid}`), { headers: as['membro-a'].headers });
+  });
+  test('o responsável e a liderança veem; outra instituição, não', async () => {
+    const [{ id: membro }] = await get('adm-a', `members?select=id&church_id=eq.${church.a}&user_id=eq.${as['membro-a'].id}`);
+    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+    const md = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const day = `${now.getFullYear()}-${md}`;
+    const name = `Criança ${Date.now()}`;
+    const kid = await api.post(rest('children'), {
+      headers: returning(as['membro-a'].headers),
+      data: { church_id: church.a, name, birth_date: `2019-${md === '02-29' ? '02-28' : md}`, guardian_member_id: membro },
+    });
+    expect(kid.ok(), await kid.text()).toBe(true);
+    ids.kid = (await kid.json())[0].id;
+    const seen = async (who, c = church.a) => {
+      const r = await rpc(who, 'kids_birthdays_between', { p_church: c, p_from: day, p_to: day });
+      return r.ok() ? (await r.json()).filter((x) => x.child_id === ids.kid) : [];
+    };
+    const mine = await seen('membro-a');
+    expect(mine).toHaveLength(1);
+    expect(mine[0]).toEqual(expect.objectContaining({ name, on_date: day, years: now.getFullYear() - 2019 }));
+    expect(await seen('lider-a')).toHaveLength(1);
+    expect(await seen('adm-b')).toEqual([]);
+    expect(await seen('adm-b', church.b)).toEqual([]);
+    expect(await seen('sem-igreja')).toEqual([]);
+    // Período grande demais: recusa.
+    expect((await rpc('lider-a', 'kids_birthdays_between', { p_church: church.a, p_from: '2026-01-01', p_to: '2026-06-01' })).ok()).toBe(false);
+  });
+});
+
 test.describe('Quem reagiu e reações no chat (027)', () => {
   const ids = {};
   test.afterAll(async () => {
