@@ -289,6 +289,10 @@ legend { font-weight: 700; padding: 0 4px; }
 .hero, .church-hero { text-align: center; padding: 24px 8px 16px; }
 .hero img, .church-hero img { border-radius: 20px; object-fit: contain; }
 .church-hero p { color: var(--muted); }
+/* A logo do Início abre em tela cheia ao tocar. */
+.hero-logo { padding: 0; border: 0; background: none; border-radius: 20px; cursor: zoom-in; }
+.hero-logo:focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; }
+.hero-logo:active img { transform: scale(.97); }
 .hero .btn { margin: 12px 0 4px; }
 
 .shortcuts { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 0 0 16px; }
@@ -298,6 +302,19 @@ legend { font-weight: 700; padding: 0 4px; }
   color: var(--ink); text-decoration: none; font-weight: 600;
 }
 .shortcut svg { width: 30px; height: 30px; color: var(--link); }
+.shortcut { position: relative; }
+.shortcut span { text-align: center; overflow-wrap: anywhere; }
+.tile-badge { position: absolute; top: 8px; right: 8px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: var(--brand); color: var(--brand-ink); font-size: .75rem; display: grid; place-items: center; }
+/* Organizar arrastando (salas e chat): a alça ≡ à direita do item. */
+.sort-row { display: flex; align-items: center; gap: 4px; }
+.sort-row > a { flex: 1; min-width: 0; }
+.sort-row.sorting { position: relative; z-index: 2; opacity: .92; }
+.sort-row.sorting > a { box-shadow: 0 8px 24px rgb(0 0 0 / .18); }
+.grip { display: grid; place-items: center; width: 40px; height: 48px; flex: none; padding: 0; border: 0; border-radius: 10px; background: none; color: var(--muted); cursor: grab; touch-action: none; }
+.grip svg { width: 22px; height: 22px; stroke-width: 2.2; }
+.grip:active { cursor: grabbing; background: var(--brand-soft); }
+.grip:focus-visible { outline: 2px solid var(--brand); }
+.week-tag { display: inline-block; width: max-content; margin: 2px 0; }
 .shortcut small { color: var(--muted); font-weight: 400; }
 .shortcut.soon { opacity: .75; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
@@ -340,7 +357,10 @@ svg.inline { vertical-align: -3px; }
 
 /* ---------- Membros ---------- */
 .actions-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
-.back { display: inline-block; margin-bottom: 4px; text-decoration: none; font-weight: 600; }
+/* Voltar: a seta é um ícone mais grosso e maior que o "←" das letras. */
+.back { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; margin-bottom: 4px; text-decoration: none; font-weight: 600; }
+.back svg, .chat-back svg, .viewer-back svg { stroke-width: 2.6; }
+.back svg { width: 22px; height: 22px; flex: none; }
 .search { flex-direction: row; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--muted); }
 .search input { border: 0 !important; padding-left: 0 !important; outline: none; background: transparent; }
 .filters { margin: 10px 0 4px; }
@@ -1097,7 +1117,9 @@ body.totem-full #tabbar, body.totem-full .topbar { visibility: hidden; }
 .chat-room { display: flex; flex-direction: column; padding-bottom: var(--compose-h, 72px); }
 .chat-head { display: flex; align-items: center; gap: 8px; margin: -16px -16px 8px; padding: 8px 12px;
   background: var(--surface); border-bottom: 1px solid var(--line); }
-.chat-back { font-size: 1.4rem; text-decoration: none; padding: 4px 8px; color: var(--link); }
+.chat-back { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; text-decoration: none; color: var(--link); }
+.chat-back svg { width: 28px; height: 28px; }
+.chat-back:active { background: var(--brand-soft); }
 .chat-title { display: flex; flex-direction: column; min-width: 0; color: var(--ink); text-decoration: none; }
 .chat-title strong, .chat-title small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-title small { color: var(--muted); font-size: .8rem; }

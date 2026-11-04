@@ -227,6 +227,7 @@ function prefetchScreens() {
     if (featureOn('avisos')) screenFetch('avisos', loadAnnouncements).catch(() => {});
     if (featureOn('salas')) screenFetch('filhos', loadMyKids).catch(() => {});
     if (projectsOn()) screenFetch('projetos', loadProjects).catch(() => {});
+    if (featureOn('oracao')) screenFetch('mural', loadPrayerWall).catch(() => {});
     // E as conversas mais recentes, para abrirem na hora ao tocar.
     if (featureOn('chat')) screenFetch('chat', loadChatGroups).then(prefetchChatRooms).catch(() => {});
     if (canCreateGroups()) screenFetch('chat:candidatos', () => loadChatCandidates(null)).catch(() => {});
@@ -553,7 +554,7 @@ function printAs(fileTitle) {
 function drawSheet({ back, backText, title, accent, sub, body, signs, file }) {
   $view.innerHTML = `
     <div class="page sheet-page">
-      <a href="${back}" class="back no-print">← ${esc(backText)}</a>
+      <a href="${back}" class="back no-print">${icon.back} ${esc(backText)}</a>
       <article class="sheet">
         ${sheetHead(title, accent, sub)}
         ${body}
@@ -621,6 +622,8 @@ const icon = {
   camera: '<svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>',
   eye: '<svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
   play: '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>',
+  project: '<svg viewBox="0 0 24 24"><path d="M9 18h6M10 21.5h4"/><path d="M12 2.5a6.5 6.5 0 0 0-3.9 11.7c.6.5 1 1.2 1 2V16.5h5.8v-.3c0-.8.4-1.5 1-2A6.5 6.5 0 0 0 12 2.5z"/></svg>',
+  grip: '<svg viewBox="0 0 24 24"><path d="M5 8h14M5 12h14M5 16h14"/></svg>',
   reply: '<svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
   copy: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg>',
   pencil: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></svg>',
@@ -866,6 +869,10 @@ const churchRoutes = [
   [/^\/calendario\/(\d{4}-\d{2})$/, viewCalendar],
   [/^\/calendario\/dia\/(\d{4}-\d{2}-\d{2})$/, viewCalendarDay],
   [/^\/agenda\/calendarios$/, viewYearCalendars],
+  [/^\/oracao$/, viewPrayers],
+  [/^\/oracao\/novo$/, viewPrayerForm],
+  [/^\/oracao\/meus$/, viewMyPrayers],
+  [/^\/oracao\/moderar$/, viewPrayerModeration],
   [/^\/agenda\/calendarios\/([0-9a-f-]{36})\/editar$/, viewYearCalendarForm],
   [/^\/agenda\/calendario\/([0-9a-f-]{36})$/, viewYearCalendar],
   [/^\/agenda\/novo$/, viewEventForm],
@@ -1213,6 +1220,32 @@ function viewInvite(m) {
   };
 }
 
+// A logo grande do Início: tocar abre em tela cheia para ver melhor.
+function bindHeroLogo(c) {
+  document.getElementById('hero-logo')?.addEventListener('click', () =>
+    openMediaViewer({ url: new URL(c.logo_url || 'icons/icon-192.png', document.baseURI).href, type: 'image/png', name: c.name }),
+  );
+}
+
+// Grupos do chat marcados "Mostrar no Início" (032): um atalho com o nome do grupo, só para quem
+// está no grupo. Desenha com a lista guardada e confere com o banco.
+function homeChatTiles() {
+  if (!featureOn('chat') || !isActiveMember()) return;
+  const draw = (groups) => {
+    const box = document.getElementById('home-shortcuts');
+    if (!box) return;
+    box.querySelectorAll('[data-chat-tile]').forEach((el) => el.remove());
+    for (const g of (groups || []).filter((x) => x.show_on_home)) {
+      box.insertAdjacentHTML(
+        'beforeend',
+        `<a class="shortcut" data-chat-tile href="#/chat/${g.id}">${icon.chat}<span>${esc(g.name)}</span>${g.unread ? `<b class="tile-badge" aria-label="${g.unread} não lidas">${g.unread > 99 ? '99+' : g.unread}</b>` : ''}</a>`,
+      );
+    }
+  };
+  draw(screenCached('chat'));
+  screenFetch('chat', loadChatGroups).then(draw).catch(() => {});
+}
+
 async function viewChurchHome() {
   const c = state.church;
   const m = myMember();
@@ -1220,7 +1253,9 @@ async function viewChurchHome() {
 
   const head = `
     <section class="church-hero">
-      <img src="${esc(c.logo_url || 'icons/icon-192.png')}" alt="" width="84" height="84">
+      <button type="button" class="hero-logo" id="hero-logo" aria-label="Ver a logo">
+        <img src="${esc(c.logo_url || 'icons/icon-192.png')}" alt="" width="84" height="84">
+      </button>
       <h1>${esc(c.name)}</h1>
       ${c.welcome_text ? `<p>${esc(c.welcome_text)}</p>` : ''}
     </section>`;
@@ -1256,10 +1291,11 @@ async function viewChurchHome() {
     ['aniversarios', icon.cake, 'Aniversários', '#/aniversariantes'],
     ['salas', icon.child, 'Meus filhos', '#/filhos'],
     ['salas_tutor', icon.users, 'Salas', '#/salas'],
-    ['projetos', icon.book, 'Projetos', '#/projetos'],
+    ['projetos', icon.project, 'Projetos', '#/projetos'],
     ['carteirinha', icon.idcard, 'Carteirinha', '#/carteirinha'],
     ['galeria', icon.image, 'Galeria', '#/galeria'],
     ['chat', icon.chat, 'Chat', '#/chat'],
+    ['oracao', icon.heart, 'Oração', '#/oracao'],
     ['pix', icon.pix, 'Pix', '#/pix'],
   ].filter(([k]) => (k === 'pix' ? offerReady() : k === 'aniversarios' ? datesOn() : k === 'salas_tutor' ? roomsTeam() : k === 'projetos' ? projectsOn() : featureOn(k)));
   $view.innerHTML = `
@@ -1267,7 +1303,7 @@ async function viewChurchHome() {
       ${head}
       ${
         shortcuts.length
-          ? `<div class="shortcuts">${shortcuts
+          ? `<div class="shortcuts" id="home-shortcuts">${shortcuts
               .map(([, ic, label, href]) =>
                 href
                   ? `<a class="shortcut" href="${href}">${ic}<span>${label}</span></a>`
@@ -1288,6 +1324,8 @@ async function viewChurchHome() {
       <div id="push-invite"></div>
       ${aboutCard(c)}
     </div>`;
+  bindHeroLogo(c);
+  homeChatTiles();
   const slot = (id) => document.getElementById(id);
   const box = slot('home-carousel');
   const changed = () => setupCarousel(box);
@@ -1347,7 +1385,9 @@ async function viewMenu() {
         ${datesOn() ? `<a class="menu-row" href="#/aniversariantes">${icon.cake}<span>Aniversariantes do mês</span>${icon.chevron}</a>` : ''}
         ${featureOn('salas') ? `<a class="menu-row" href="#/filhos">${icon.child}<span>Meus filhos</span>${icon.chevron}</a>` : ''}
         ${roomsTeam() ? `<a class="menu-row" href="#/salas">${icon.users}<span>${isLeaderRole(m.role) ? 'Salas das crianças' : 'Minhas salas'}</span>${icon.chevron}</a>` : ''}
-        ${projectsOn() ? `<a class="menu-row" href="#/projetos">${icon.book}<span>Projetos das salas</span>${icon.chevron}</a>` : ''}
+        ${projectsOn() ? `<a class="menu-row" href="#/projetos">${icon.project}<span>Projetos das salas</span>${icon.chevron}</a>` : ''}
+        ${featureOn('oracao') ? `<a class="menu-row" href="#/oracao">${icon.heart}<span>Pedidos de oração</span>${icon.chevron}</a>` : ''}
+        ${featureOn('oracao') && isPastoral() ? `<a class="menu-row" href="#/oracao/moderar">${icon.heart}<span>Moderar pedidos de oração</span>${icon.chevron}</a>` : ''}
         ${featureOn('galeria') ? `<a class="menu-row" href="#/galeria">${icon.image}<span>Galeria de fotos</span>${icon.chevron}</a>` : ''}
         ${featureOn('chat') ? `<a class="menu-row" href="#/chat">${icon.chat}<span>Chat</span>${icon.chevron}</a>` : ''}
         ${featureOn('carteirinha') ? `<a class="menu-row" href="#/carteirinha">${icon.idcard}<span>Minha carteirinha</span>${icon.chevron}</a>` : ''}
@@ -2207,7 +2247,7 @@ async function viewMemberForm(ctx, id) {
 
   $view.innerHTML = `
     <form id="member" class="form page">
-      <a href="#/membros" class="back">← Membros</a>
+      <a href="#/membros" class="back">${icon.back} Membros</a>
       <h1>${isNew ? 'Novo membro' : esc(m.name)}</h1>
       ${st ? `<p><span class="tag ${st.cls}">${st.label}</span></p>` : ''}
       ${photoField(m.name, photoUrl)}
@@ -2372,7 +2412,7 @@ async function viewImport(ctx) {
 
   $view.innerHTML = `
     <div class="page">
-      <a href="#/membros" class="back">← Membros</a>
+      <a href="#/membros" class="back">${icon.back} Membros</a>
       <h1>Importar planilha</h1>
       <div class="card">
         <p>Use uma planilha com as colunas <strong>nome</strong>, <strong>email</strong>, <strong>telefone</strong> e <strong>nascimento</strong> na primeira linha. Só o nome é obrigatório.</p>
@@ -2923,7 +2963,7 @@ const projectDeliveries = (projects, fromIso, toIso) =>
 function deliveryCard(p) {
   return `
     <a class="event-card delivery" href="#/projetos/${p.id}">
-      <span class="event-time">${icon.book}</span>
+      <span class="event-time">${icon.project}</span>
       <span><strong>${esc(p.title)}</strong><small>Entrega do projeto${p.room_name ? ` · ${esc(p.room_name)}` : ''}</small></span>
       ${icon.chevron}
     </a>`;
@@ -3187,7 +3227,7 @@ function drawEvent(ctx, ev) {
 
   $view.innerHTML = `
     <div class="page">
-      <a href="#/agenda" class="back">← Agenda</a>
+      <a href="#/agenda" class="back">${icon.back} Agenda</a>
       <h1>${esc(ev.title)}</h1>
       <p class="meta">${icon.clock}${esc(fmtEventWhen(occ))}</p>
       ${ev.location ? `<p class="meta">${icon.pin}${esc(ev.location)}</p>` : ''}
@@ -3298,7 +3338,7 @@ async function viewEventForm(ctx, id) {
 
   $view.innerHTML = `
     <form id="event" class="form page">
-      <a href="${id ? `#/agenda/${id}` : '#/agenda'}" class="back">← ${id ? 'Evento' : 'Agenda'}</a>
+      <a href="${id ? `#/agenda/${id}` : '#/agenda'}" class="back">${icon.back} ${id ? 'Evento' : 'Agenda'}</a>
       <h1>${id ? 'Editar evento' : 'Novo evento'}</h1>
       <label>Título<input name="title" required minlength="3" maxlength="120" value="${esc(ev.title)}" placeholder="Reunião de pais"></label>
       <label>Data<input name="date" type="date" required value="${s ? isoLocal(s) : /^\d{4}-\d{2}-\d{2}$/.test(ctx.params.get('data') || '') ? ctx.params.get('data') : ''}"></label>
@@ -3576,7 +3616,7 @@ async function viewAnnouncementForm(ctx, id) {
   if (!ctx.alive()) return;
   $view.innerHTML = `
     <form id="notice" class="form page">
-      <a href="#/avisos" class="back">← Avisos</a>
+      <a href="#/avisos" class="back">${icon.back} Avisos</a>
       <h1>${id ? 'Editar aviso' : 'Novo aviso'}</h1>
       <label>Título<input name="title" required minlength="3" maxlength="120" value="${esc(a.title)}"></label>
       <label>Aviso<textarea name="body" required rows="6" maxlength="4000">${esc(a.body)}</textarea></label>
@@ -3764,10 +3804,10 @@ function drawParentRoom({ room, messages = [], sessions = [], present = [], kids
     kids.filter((k) => present.some((p) => p.session_id === sessionId && p.child_id === k.id)).map((k) => firstName(k.name));
   $view.innerHTML = `
     <div class="page">
-      <a href="#/filhos" class="back">← Meus filhos</a>
+      <a href="#/filhos" class="back">${icon.back} Meus filhos</a>
       <h1>Sala ${esc(room.name)}</h1>
       <p class="hint">${room.tutor_name ? `Tutor: ${esc(room.tutor_name)}` : 'Sem tutor no momento'}${room.description ? ` · ${esc(room.description)}` : ''}</p>
-      ${projectsOn() ? `<a class="btn" href="#/projetos?sala=${room.id}">${icon.book} Projetos da sala</a>` : ''}
+      ${projectsOn() ? `<a class="btn" href="#/projetos?sala=${room.id}">${icon.project} Projetos da sala</a>` : ''}
       <section class="card">
         <h2>${icon.megaphone} Avisos</h2>
         ${
@@ -3836,7 +3876,7 @@ async function viewChildForm(ctx, id) {
   const desk = team && !c.guardian_member_id && (!id || c.guardian_name);
   $view.innerHTML = `
     <form id="child" class="form page">
-      <a href="#${back}" class="back">← ${team ? 'Crianças' : 'Meus filhos'}</a>
+      <a href="#${back}" class="back">${icon.back} ${team ? 'Crianças' : 'Meus filhos'}</a>
       <h1>${id ? 'Editar criança' : team ? 'Cadastrar criança' : 'Cadastrar filho'}</h1>
       <label>Nome da criança<input name="name" required minlength="2" maxlength="120" value="${esc(c.name)}" autocomplete="off"></label>
       <label>Data de nascimento<input name="birth_date" type="date" value="${esc(c.birth_date || '')}" max="${isoLocal(new Date())}"></label>
@@ -3952,26 +3992,40 @@ function drawRooms(rooms) {
       ${leader ? `<a class="btn" href="#/salas/criancas">${icon.child} Todas as crianças</a>` : ''}
       ${
         list.length
-          ? `<div class="list">${list
+          ? `${leader && list.length > 1 ? `<p class="hint">Para mudar a ordem das salas, arraste pelo ${icon.grip} à direita.</p>` : ''}<div class="list" id="rooms-list">${list
               .map(
                 (r) => `
+          <div class="sort-row" data-sort-id="${r.id}">
           <a class="event-card" href="#/salas/${r.id}">
             <span><strong>${esc(r.name)}</strong>
+              ${r.week ? `<span class="tag role week-tag">Semana ${r.week}</span>` : ''}
               <small>${r.kids === 1 ? '1 criança' : `${r.kids} crianças`} · ${r.tutor_name ? `Tutor: ${esc(r.tutor_name)}` : 'Sem tutor'}</small></span>${icon.chevron}
-          </a>`,
+          </a>
+          ${leader ? gripButton(r.name) : ''}
+          </div>`,
               )
               .join('')}</div>`
           : `<div class="empty"><p>${leader ? 'Nenhuma sala ainda. Toque no <strong>+</strong> para criar.' : 'Você não é tutor de nenhuma sala.'}</p></div>`
       }
       ${leader ? fab('#/salas/nova', 'Nova sala') : ''}
     </div>`;
+  const box = document.getElementById('rooms-list');
+  if (box && leader)
+    sortable(box, async (ids) => {
+      const all = screenCached('salas') || rooms;
+      const byId = new Map(all.map((r) => [r.id, r]));
+      const rest = all.filter((r) => !ids.includes(r.id));
+      screenUpdate('salas', [...ids.map((x, i) => ({ ...byId.get(x), sort_order: i + 1 })), ...rest]);
+      const { error } = await sb.rpc('rooms_reorder', { p_church: state.church.id, p_ids: ids });
+      if (error) toast(errorText(error), 'error');
+    });
 }
 
 // Criar ou editar a sala (liderança): nome, descrição e o tutor.
 async function viewRoomForm(ctx, id) {
   if (!requireMemberFeature(ctx.path, 'salas')) return;
   if (!isLeaderRole(myRole())) return navigate('/salas');
-  const blank = { name: '', description: '', tutor_member_id: null };
+  const blank = { name: '', description: '', tutor_member_id: null, week: null };
   const tutorOptions = (members, current) =>
     '<option value="">Sem tutor</option>' +
     members
@@ -3982,10 +4036,16 @@ async function viewRoomForm(ctx, id) {
   const draw = (r, members) => {
     $view.innerHTML = `
     <form id="room" class="form page">
-      <a href="#${id ? `/salas/${id}` : '/salas'}" class="back">← ${id ? esc(r.name) : 'Salas'}</a>
+      <a href="#${id ? `/salas/${id}` : '/salas'}" class="back">${icon.back} ${id ? esc(r.name) : 'Salas'}</a>
       <h1>${id ? 'Editar sala' : 'Nova sala'}</h1>
       <label>Nome da sala<input name="name" required minlength="2" maxlength="40" value="${esc(r.name)}" placeholder="Ex.: Maternal, Kids, Juniores"></label>
       <label>Descrição (opcional)<input name="description" maxlength="200" value="${esc(r.description || '')}" placeholder="Ex.: de 3 a 5 anos, sala 2"></label>
+      <label>Semana
+        <select name="week"><option value="">Sem semana</option>${Array.from({ length: 30 }, (_, i) => i + 1)
+          .map((n) => `<option value="${n}" ${n === r.week ? 'selected' : ''}>Semana ${n}</option>`)
+          .join('')}</select>
+        <small class="hint">Aparece no cartão da sala.</small>
+      </label>
       <label>Tutor
         <select name="tutor">${tutorOptions(members, r.tutor_member_id)}</select>
         <small class="hint">O tutor vê as crianças da sala, marca a presença, escreve as anotações da aula e avisa os pais. Ele precisa usar o app.</small>
@@ -3996,7 +4056,12 @@ async function viewRoomForm(ctx, id) {
     form = document.getElementById('room');
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const row = { name: form.name.value.trim(), description: form.description.value.trim() || null, tutor_member_id: form.tutor.value || null };
+      const row = {
+        name: form.name.value.trim(),
+        description: form.description.value.trim() || null,
+        tutor_member_id: form.tutor.value || null,
+        week: form.week.value ? Number(form.week.value) : null,
+      };
       const btn = form.querySelector('button.primary');
       btn.disabled = true;
       const { data, error } = id
@@ -4062,7 +4127,7 @@ function drawRoom(ctx, id, { room, kids, notes, messages, day }) {
   const here = kids.filter((k) => k.present).length;
   $view.innerHTML = `
     <div class="page">
-      <a href="#/salas" class="back">← Salas</a>
+      <a href="#/salas" class="back">${icon.back} Salas</a>
       <h1>Sala ${esc(room.name)}</h1>
       <p class="hint">${room.tutor_name ? `Tutor: ${esc(room.tutor_name)}` : 'Sem tutor'}${room.description ? ` · ${esc(room.description)}` : ''}</p>
       <section class="card event-save room-actions" aria-label="Ações da sala">
@@ -4075,7 +4140,7 @@ function drawRoom(ctx, id, { room, kids, notes, messages, day }) {
           ${
             projectsOn()
               ? `<a class="save-tile" href="#/projetos?sala=${id}">
-                  <span class="save-icon">${icon.book}</span>
+                  <span class="save-icon">${icon.project}</span>
                   <strong>Projetos</strong>
                   <small>Da sala</small>
                 </a>`
@@ -4200,7 +4265,7 @@ async function viewRoomNotice(ctx, id) {
   if (!known) {
     const name = nameOf(await screenFetch('salas', loadRoomsList).catch(() => []));
     const back = document.getElementById('notice-back');
-    if (name && back && ctx.alive()) back.textContent = `← Sala ${name}`;
+    if (name && back && ctx.alive()) back.innerHTML = `${icon.back} Sala ${esc(name)}`;
   }
 }
 
@@ -4231,7 +4296,7 @@ function drawAllKids(ctx, { kids, rooms }) {
   const noRoom = kids.filter((k) => !k.room_id).length;
   $view.innerHTML = `
     <div class="page">
-      <a href="#/salas" class="back">← Salas</a>
+      <a href="#/salas" class="back">${icon.back} Salas</a>
       <h1>Crianças</h1>
       <p class="hint">${kids.length === 1 ? '1 criança' : `${kids.length} crianças`}${noRoom ? ` · ${noRoom} sem sala` : ''}. Toque numa criança para escolher a sala.</p>
       <form id="kid-search"><label class="search">${icon.search}<input type="search" name="busca" placeholder="Buscar pelo nome" aria-label="Buscar criança pelo nome" value="${esc(ctx.params.get('busca') || '')}"></label></form>
@@ -4522,16 +4587,19 @@ function drawChatGroups(groups, urls = {}) {
       <h1>Chat</h1>
       ${
         groups.length
-          ? `<div class="list chat-list">${groups
+          ? `<p class="hint">Para mudar a ordem, arraste pelo ${icon.grip} à direita.</p><div class="list chat-list" id="chat-list">${groups
               .map(
                 (g) => `
+          <div class="sort-row" data-sort-id="${g.id}">
           <a class="chat-row ${g.unread ? 'unread' : ''}" href="#/chat/${g.id}">
             ${avatar(g.name, g.icon_path && urls[g.icon_path])}
             <span class="chat-row-text"><strong>${esc(g.name)}${g.locked ? ' <span title="Só administradores enviam">🔒</span>' : ''}</strong><small>${chatPreview(g)}</small></span>
             <span class="chat-row-side">${g.last_body || g.last_file ? `<small>${esc(notifTime(g.last_message_at))}</small>` : ''}${
               g.unread ? `<span class="chat-unread" aria-label="${g.unread} não lidas">${g.unread > 99 ? '99+' : g.unread}</span>` : ''
             }</span>
-          </a>`,
+          </a>
+          ${gripButton(g.name)}
+          </div>`,
               )
               .join('')}</div>`
           : `<div class="empty"><p>Você ainda não está em nenhum grupo.${
@@ -4540,12 +4608,77 @@ function drawChatGroups(groups, urls = {}) {
       }
       ${create ? fab('#/chat/novo', 'Novo grupo') : ''}
     </div>`;
+  const list = document.getElementById('chat-list');
+  if (list)
+    sortable(list, async (ids) => {
+      const all = screenCached('chat') || groups;
+      const byId = new Map(all.map((g) => [g.id, g]));
+      const next = ids.map((x, i) => ({ ...byId.get(x), sort_order: i + 1 })).filter((g) => g.id);
+      screenUpdate('chat', next);
+      const { error } = await sb.rpc('chat_reorder', { p_church: state.church.id, p_ids: ids });
+      if (error) toast(errorText(error), 'error');
+    });
+}
+
+// Organizar uma lista arrastando pela alça (≡ à direita do item): o item acompanha o dedo e troca
+// de lugar com os vizinhos; ao soltar, onDrop recebe os ids na ordem nova. Pelo teclado, as setas
+// para cima e para baixo na alça fazem o mesmo.
+const gripButton = (name) =>
+  `<button type="button" class="grip" data-grip aria-label="Mudar a ordem de ${esc(name)}" title="Arraste para mudar a ordem">${icon.grip}</button>`;
+function sortable(list, onDrop) {
+  const ids = () => [...list.querySelectorAll('[data-sort-id]')].map((x) => x.dataset.sortId);
+  list.addEventListener('pointerdown', (e) => {
+    const grip = e.target.closest('[data-grip]');
+    if (!grip || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    e.preventDefault();
+    const item = grip.closest('[data-sort-id]');
+    const before = ids().join();
+    let startY = e.clientY;
+    item.classList.add('sorting');
+    navigator.vibrate?.(10);
+    const move = (ev) => {
+      let dy = ev.clientY - startY;
+      const next = item.nextElementSibling?.matches('[data-sort-id]') ? item.nextElementSibling : null;
+      const prev = item.previousElementSibling?.matches('[data-sort-id]') ? item.previousElementSibling : null;
+      const top = item.offsetTop;
+      if (next && dy > next.offsetHeight / 2) list.insertBefore(next, item);
+      else if (prev && dy < -prev.offsetHeight / 2) list.insertBefore(item, prev);
+      startY += item.offsetTop - top; // o lugar novo vira o ponto de partida
+      dy = ev.clientY - startY;
+      item.style.transform = `translateY(${dy}px)`;
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      item.style.transform = '';
+      item.classList.remove('sorting');
+      if (ids().join() !== before) onDrop(ids());
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  });
+  // A alça não abre o item.
+  list.addEventListener('click', (e) => e.target.closest('[data-grip]') && e.preventDefault(), true);
+  list.addEventListener('keydown', (e) => {
+    const grip = e.target.closest('[data-grip]');
+    if (!grip || !['ArrowUp', 'ArrowDown'].includes(e.key)) return;
+    e.preventDefault();
+    const item = grip.closest('[data-sort-id]');
+    const other = e.key === 'ArrowUp' ? item.previousElementSibling : item.nextElementSibling;
+    if (!other?.matches('[data-sort-id]')) return;
+    if (e.key === 'ArrowUp') list.insertBefore(item, other);
+    else list.insertBefore(other, item);
+    grip.focus();
+    onDrop(ids());
+  });
 }
 
 // Conversa: o grupo, os participantes e as últimas mensagens (as mais antigas por último na busca).
 async function loadChatRoom(id) {
   const [g, people, msgs, reacts] = await Promise.all([
-    sb.from('chat_groups').select('id, name, description, locked, icon_path').eq('id', id).maybeSingle(),
+    sb.from('chat_groups').select('id, name, description, locked, icon_path, show_on_home').eq('id', id).maybeSingle(),
     sb.rpc('chat_group_members', { p_group: id }),
     chatMessagesQuery(id),
     // Reações das mensagens do grupo (027): quem reagiu e com qual emoji.
@@ -4826,7 +4959,7 @@ function drawChatRoom(id, data, urls = {}) {
     $view.innerHTML = `
       <div class="chat-room" id="chat-room" data-group="${id}">
         <header class="chat-head">
-          <a href="#/chat" class="chat-back" aria-label="Voltar para o chat">←</a>
+          <a href="#/chat" class="chat-back" aria-label="Voltar para o chat">${icon.back}</a>
           <a class="chat-title" href="#/chat/${id}/info" aria-label="Dados do grupo">
             <span id="chat-icon"></span>
             <span class="chat-title-text"><strong id="chat-name"></strong><small id="chat-sub"></small></span>
@@ -5394,7 +5527,7 @@ function drawChatInfo(id, data, urls = {}) {
   const g = data.group;
   $view.innerHTML = `
     <div class="page">
-      <a href="#/chat/${id}" class="back">← Conversa</a>
+      <a href="#/chat/${id}" class="back">${icon.back} Conversa</a>
       <div class="chat-info-head">
         ${
           // O administrador toca na foto para trocar o ícone (o lápis no canto mostra que dá).
@@ -5417,6 +5550,8 @@ function drawChatInfo(id, data, urls = {}) {
               <label>Descrição (opcional)<textarea name="description" maxlength="300" rows="2">${esc(g.description || '')}</textarea></label>
               <label class="check"><input type="checkbox" name="locked" ${g.locked ? 'checked' : ''}> Só administradores enviam mensagens
                 <small class="hint">Os outros participantes leem, mas não escrevem. Bom para recados da direção.</small></label>
+              <label class="check"><input type="checkbox" name="show_on_home" ${g.show_on_home ? 'checked' : ''}> Mostrar no Início
+                <small class="hint">Um atalho com o nome do grupo na tela inicial de quem está no grupo.</small></label>
               <button class="btn primary">Salvar</button>
             </form>`
           : g.locked
@@ -5457,7 +5592,7 @@ function drawChatInfo(id, data, urls = {}) {
     const list = screenCached('chat');
     const row = list?.find((x) => x.id === id);
     if (row) {
-      Object.assign(row, { name: data.group.name, description: data.group.description, locked: data.group.locked, members: data.people.length });
+      Object.assign(row, { name: data.group.name, description: data.group.description, locked: data.group.locked, members: data.people.length, show_on_home: !!data.group.show_on_home });
       screenUpdate('chat', list);
     }
     toast(msg);
@@ -5498,10 +5633,12 @@ function drawChatInfo(id, data, urls = {}) {
     const f = e.currentTarget;
     const { error } = await sb
       .from('chat_groups')
-      .update({ name: f.name.value.trim(), description: f.description.value.trim() || null, locked: f.locked.checked })
+      .update({ name: f.name.value.trim(), description: f.description.value.trim() || null, locked: f.locked.checked, show_on_home: f.show_on_home.checked })
       .eq('id', id);
     if (error) return toast(errorText(error), 'error');
-    after('Grupo salvo.', (d) => Object.assign(d.group, { name: f.name.value.trim(), description: f.description.value.trim() || null, locked: f.locked.checked }));
+    after('Grupo salvo.', (d) =>
+      Object.assign(d.group, { name: f.name.value.trim(), description: f.description.value.trim() || null, locked: f.locked.checked, show_on_home: f.show_on_home.checked }),
+    );
   });
   $view.querySelectorAll('[data-admin]').forEach(
     (b) =>
@@ -5609,7 +5746,7 @@ function drawChatForm(people) {
   const keep = old ? { name: old.name.value, description: old.description.value, locked: old.locked.checked, picks: picked(old) } : null;
   $view.innerHTML = `
     <form class="form page" id="chat-new">
-      <a href="#/chat" class="back">← Chat</a>
+      <a href="#/chat" class="back">${icon.back} Chat</a>
       <h1>Novo grupo</h1>
       <label>Nome do grupo<input name="name" required minlength="2" maxlength="60" placeholder="Ex.: Pais do 5º ano"></label>
       <label>Descrição (opcional)<textarea name="description" maxlength="300" rows="2" placeholder="Para que serve o grupo"></textarea></label>
@@ -5670,7 +5807,7 @@ function drawChatAdd(id, people) {
   const keep = old ? picked(old) : [];
   $view.innerHTML = `
     <form class="form page" id="chat-add">
-      <a href="#/chat/${id}/info" class="back">← Grupo</a>
+      <a href="#/chat/${id}/info" class="back">${icon.back} Grupo</a>
       <h1>Adicionar pessoas</h1>
       ${pickerHtml(people)}
       ${people.length ? '<button class="btn primary big">Adicionar ao grupo</button>' : ''}
@@ -5706,6 +5843,8 @@ function drawChatAdd(id, people) {
 // veem o tutor, a liderança e os pais das crianças da sala, que também comentam.
 // As regras ficam no banco (supabase/021_icone_e_projetos.sql).
 // ---------------------------------------------------------------------
+// A direção (pedidos de oração): o administrador e os líderes; a secretaria não lê os pedidos.
+const isPastoral = () => ['admin', 'lider'].includes(myRole());
 const projectsOn = () => featureOn('projetos') && featureOn('salas');
 // Cuida dos projetos da sala (o banco confere de novo).
 const canEditRoomProjects = (roomId) =>
@@ -5955,7 +6094,7 @@ function drawProject(id, data, urls = {}) {
   const done = data.steps.filter((s) => s.done_at).length;
   $view.innerHTML = `
     <div class="page">
-      <a href="#/projetos?sala=${encodeURIComponent(p.room_id)}" class="back">← Projetos</a>
+      <a href="#/projetos?sala=${encodeURIComponent(p.room_id)}" class="back">${icon.back} Projetos</a>
       <h1>${esc(p.title)}</h1>
       <p class="hint">Sala ${esc(p.room?.name || '')}${projectDates(p) ? ` · ${esc(projectDates(p))}` : ''}</p>
       ${p.description ? `<p class="pre">${linkify(p.description)}</p>` : ''}
@@ -6250,7 +6389,7 @@ function fillProjectRooms(p, rooms) {
 function drawProjectForm(id, p, rooms) {
   $view.innerHTML = `
     <form class="form page" id="project-form">
-      <a href="${id ? `#/projetos/${id}` : '#/projetos'}" class="back">← ${id ? esc(p.title) : 'Projetos'}</a>
+      <a href="${id ? `#/projetos/${id}` : '#/projetos'}" class="back">${icon.back} ${id ? esc(p.title) : 'Projetos'}</a>
       <h1>${id ? 'Editar projeto' : 'Novo projeto'}</h1>
       <section class="card form-block">
       <h2>Sobre o projeto</h2>
@@ -6382,7 +6521,7 @@ function drawYearCalendar(k, urls) {
   const pdf = k.file_type === 'application/pdf';
   $view.innerHTML = `
     <div class="page">
-      <a href="#/agenda" class="back">← Agenda</a>
+      <a href="#/agenda" class="back">${icon.back} Agenda</a>
       <h1>${esc(k.title)} ${k.year}</h1>
       ${
         pdf
@@ -6551,7 +6690,7 @@ function drawYearCalendars(all) {
   const keep = typing ? { title: typing.title.value, year: typing.year.value } : null;
   $view.innerHTML = `
     <div class="page">
-      <a href="#/agenda" class="back">← Agenda</a>
+      <a href="#/agenda" class="back">${icon.back} Agenda</a>
       <h1>Calendário do ano</h1>
       <p class="hint">Aparece no topo da Agenda para todos da instituição de ensino. Os de anos que já passaram somem da Agenda (ficam aqui para você apagar).</p>
       ${
@@ -6640,7 +6779,7 @@ async function viewYearCalendarForm(ctx, id) {
   const years = [...new Set([k.year, y - 1, y, y + 1])].sort();
   $view.innerHTML = `
     <form class="form page" id="cal-edit">
-      <a href="#/agenda/calendarios" class="back">← Calendário do ano</a>
+      <a href="#/agenda/calendarios" class="back">${icon.back} Calendário do ano</a>
       <h1>Editar calendário</h1>
       <label>Nome<input name="title" required minlength="2" maxlength="80" value="${esc(k.title)}"></label>
       <label>Ano<select name="year">${years.map((n) => `<option value="${n}" ${n === k.year ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
@@ -6833,7 +6972,7 @@ function drawAlbum(ctx, id, { album, photos }, urls) {
   const team = galleryTeam();
   $view.innerHTML = `
     <div class="page">
-      <a href="#/galeria" class="back">← Galeria</a>
+      <a href="#/galeria" class="back">${icon.back} Galeria</a>
       <h1>${esc(album.title)}</h1>
       <p class="hint">${esc(fmtDate(album.album_date))} · ${photos.length} ${photos.length === 1 ? 'foto' : 'fotos'}</p>
       ${album.description ? `<p class="pre">${esc(album.description)}</p>` : ''}
@@ -6935,7 +7074,7 @@ function drawGalleryPhoto(ctx, albumId, photoId, { album, photos }, urls) {
   const src = urls[p.path] || urls[p.mini_path];
   $view.innerHTML = `
     <div class="page photo-view">
-      <a href="#/galeria/${albumId}" class="back">← ${esc(album.title)}</a>
+      <a href="#/galeria/${albumId}" class="back">${icon.back} ${esc(album.title)}</a>
       <div class="photo-stage" id="stage">
         ${src ? `<img src="${esc(src)}" alt="Foto ${i + 1} de ${photos.length}">` : '<span class="thumb-wait big" aria-hidden="true"></span>'}
         ${prev ? `<a class="photo-nav prev" href="#/galeria/${albumId}/foto/${prev.id}" aria-label="Foto anterior">‹</a>` : ''}
@@ -7045,7 +7184,7 @@ async function viewAlbumForm(ctx, id) {
   if (!ctx.alive()) return;
   $view.innerHTML = `
     <form id="album" class="form page">
-      <a href="${id ? `#/galeria/${id}` : '#/galeria'}" class="back">← ${id ? esc(a.title) : 'Galeria'}</a>
+      <a href="${id ? `#/galeria/${id}` : '#/galeria'}" class="back">${icon.back} ${id ? esc(a.title) : 'Galeria'}</a>
       <h1>${id ? 'Editar álbum' : 'Novo álbum'}</h1>
       <label>Título<input name="title" required minlength="2" maxlength="80" value="${esc(a.title)}" placeholder="Festa junina"></label>
       <label>Data<input name="album_date" type="date" required value="${esc(a.album_date)}"></label>
@@ -7681,7 +7820,7 @@ async function viewMessageSettings(ctx, kind) {
 
   $view.innerHTML = `
     <form id="bday" class="form page">
-      <a href="#/menu" class="back">← Menu</a>
+      <a href="#/menu" class="back">${icon.back} Menu</a>
       <h1>${esc(info.menu)}</h1>
       <p class="hint">${esc(screen.intro)}</p>
       <label class="check"><input type="checkbox" name="enabled" ${t.enabled ? 'checked' : ''}> ${esc(screen.send)}</label>
@@ -7997,6 +8136,298 @@ async function viewMessageSettings(ctx, kind) {
     }
   });
 }
+
+// ---------------------------------------------------------------------
+// Pedidos de oração (do Igreja Conecta, 032): mural da instituição, meus pedidos e moderação (a direção: administrador e líderes)
+// ---------------------------------------------------------------------
+const PRAYER_MAX = 500;
+const PRAYER_STATUS = {
+  privado: 'Só para a direção',
+  pendente: 'Aguardando aprovação',
+  aprovado: 'No mural',
+  recusado: 'Não foi para o mural',
+};
+const fmtDayMonth = (iso) => new Date(iso).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' });
+const onWall = (p) => p.status === 'aprovado' && Date.now() - new Date(p.moderated_at).getTime() < 30 * 864e5;
+
+function prayerTabs(active) {
+  const tabs = [
+    ['/oracao', 'Mural'],
+    ['/oracao/meus', 'Meus pedidos'],
+    ...(isPastoral() ? [['/oracao/moderar', 'Moderação']] : []),
+  ];
+  return `<div class="chips filters">${tabs
+    .map(([href, label]) => `<a class="chip ${href === active ? 'active' : ''}" href="#${href}">${label}</a>`)
+    .join('')}</div>`;
+}
+
+async function loadPrayerWall() {
+  const { data, error } = await sb.rpc('prayer_wall', { p_church: state.church.id });
+  if (error) throw error;
+  return data;
+}
+
+async function viewPrayers(ctx) {
+  if (!requireMemberFeature('/oracao', 'oracao')) return;
+  await screenShow(ctx, 'mural', loadPrayerWall, drawPrayerWall);
+}
+
+function drawPrayerWall(rows) {
+  $view.innerHTML = `
+    <div class="page">
+      <h1>Pedidos de oração</h1>
+      ${prayerTabs('/oracao')}
+      ${
+        rows.length
+          ? rows
+              .map(
+                (p) => `
+            <article class="card prayer">
+              ${p.answered_at ? '<div class="tags-row"><span class="tag ok">Deus respondeu 🙌</span></div>' : ''}
+              <p class="pre">${esc(p.body)}</p>
+              <p class="hint">${p.author ? esc(p.author) : 'Pedido anônimo'}${p.anonymous && p.author ? ' (anônimo para os membros)' : ''} · ${esc(fmtDayMonth(p.approved_at))}</p>
+              <button class="btn small ${p.i_pray ? 'primary' : ''}" data-pray="${p.id}" aria-pressed="${p.i_pray}">
+                🙏 ${p.i_pray ? 'Estou orando' : 'Vou orar'}${p.praying ? ` · ${p.praying}` : ''}
+              </button>
+            </article>`,
+              )
+              .join('')
+          : `<div class="empty"><p>Nenhum pedido no mural agora. Os pedidos aprovados ficam aqui por 30 dias.</p></div>`
+      }
+      ${fab('#/oracao/novo', 'Fazer um pedido')}
+    </div>`;
+  $view.querySelectorAll('[data-pray]').forEach((b) => {
+    b.onclick = async () => {
+      b.disabled = true;
+      const { data, error: err } = await sb.rpc('prayer_toggle', { p_request: b.dataset.pray });
+      b.disabled = false;
+      if (err) return toast(errorText(err), 'error');
+      const { praying, i_pray: on } = data[0];
+      b.classList.toggle('primary', on);
+      b.setAttribute('aria-pressed', String(on));
+      b.textContent = `🙏 ${on ? 'Estou orando' : 'Vou orar'}${praying ? ` · ${praying}` : ''}`;
+      screenForget('mural');
+    };
+  });
+}
+
+async function viewPrayerForm() {
+  if (!requireMemberFeature('/oracao/novo', 'oracao')) return;
+  $view.innerHTML = `
+    <form id="prayer" class="form page">
+      <a href="#/oracao" class="back">← Pedidos de oração</a>
+      <h1>Fazer um pedido</h1>
+      <label>Seu pedido<textarea name="body" required minlength="3" maxlength="${PRAYER_MAX}" rows="6"></textarea>
+        <small class="hint" id="count">0 de ${PRAYER_MAX} letras</small></label>
+      <fieldset>
+        <legend>Para quem vai</legend>
+        <label class="check"><input type="radio" name="audience" value="pastores" checked> Só para a direção
+          <small class="hint">Só o administrador e os líderes leem. A secretaria não vê.</small></label>
+        <label class="check"><input type="radio" name="audience" value="igreja"> Para todos orarem junto
+          <small class="hint">Vai para o mural depois da aprovação da liderança e fica lá por 30 dias.</small></label>
+      </fieldset>
+      <label class="check" id="anon-box" hidden><input type="checkbox" name="anonymous"> Não mostrar meu nome
+        <small class="hint">Os membros veem "Pedido anônimo". A liderança continua vendo quem enviou.</small></label>
+      <button class="btn primary big">Enviar pedido</button>
+    </form>`;
+  const form = document.getElementById('prayer');
+  const count = document.getElementById('count');
+  form.body.addEventListener('input', () => (count.textContent = `${form.body.value.length} de ${PRAYER_MAX} letras`));
+  form.addEventListener('change', () => (document.getElementById('anon-box').hidden = form.audience.value !== 'igreja'));
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const audience = form.audience.value;
+    const btn = form.querySelector('button.primary');
+    btn.disabled = true;
+    const { error } = await sb.from('prayer_requests').insert({
+      church_id: state.church.id,
+      body: form.body.value.trim(),
+      audience,
+      anonymous: audience === 'igreja' && form.anonymous.checked,
+    });
+    btn.disabled = false;
+    if (error) return toast(errorText(error), 'error');
+    screenForget('meus-pedidos');
+    toast(audience === 'igreja' ? 'Pedido enviado. Ele vai para o mural depois da aprovação.' : 'Pedido enviado à direção.');
+    navigate('/oracao/meus');
+  });
+}
+
+async function loadMyPrayers() {
+  const { data, error } = await sb
+    .from('prayer_requests')
+    .select('id, body, audience, anonymous, status, moderated_at, answered_at, created_at')
+    .eq('church_id', state.church.id)
+    .eq('user_id', state.user.id)
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  return data;
+}
+
+async function viewMyPrayers(ctx) {
+  if (!requireMemberFeature('/oracao/meus', 'oracao')) return;
+  await screenShow(ctx, 'meus-pedidos', loadMyPrayers, drawMyPrayers);
+}
+
+function drawMyPrayers(rows) {
+  $view.innerHTML = `
+    <div class="page">
+      <h1>Pedidos de oração</h1>
+      ${prayerTabs('/oracao/meus')}
+      ${
+        rows.length
+          ? rows
+              .map(
+                (p) => `
+            <article class="card prayer">
+              <div class="tags-row">
+                <span class="tag">${p.status === 'aprovado' && !onWall(p) ? 'Saiu do mural' : PRAYER_STATUS[p.status]}</span>
+                ${p.anonymous ? '<span class="tag">Anônimo</span>' : ''}
+                ${p.answered_at ? '<span class="tag ok">Deus respondeu 🙌</span>' : ''}
+              </div>
+              <p class="pre">${esc(p.body)}</p>
+              <p class="hint">Enviado em ${esc(fmtDayMonth(p.created_at))}${p.status === 'recusado' ? '. A liderança recebeu e vai orar por você.' : ''}</p>
+              <div class="actions-row">
+                ${p.answered_at ? '' : `<button class="btn small" data-answered="${p.id}">Deus respondeu 🙌</button>`}
+                <button class="btn small danger-outline" data-delete="${p.id}">Apagar</button>
+              </div>
+            </article>`,
+              )
+              .join('')
+          : `<div class="empty"><p>Você ainda não fez nenhum pedido. Toque no <strong>+</strong> para fazer o primeiro.</p></div>`
+      }
+      ${fab('#/oracao/novo', 'Fazer um pedido')}
+    </div>`;
+  $view.querySelectorAll('[data-answered]').forEach((b) => {
+    b.onclick = async () => {
+      const { error: err } = await sb.from('prayer_requests').update({ answered_at: new Date().toISOString() }).eq('id', b.dataset.answered);
+      if (err) return toast(errorText(err), 'error');
+      screenForget('meus-pedidos');
+      screenForget('mural');
+      toast('Glória a Deus! 🙌');
+      render();
+    };
+  });
+  $view.querySelectorAll('[data-delete]').forEach((b) => {
+    b.onclick = async () => {
+      if (!await ask('Apagar este pedido? Ele sai também do mural.')) return;
+      const { error: err } = await sb.from('prayer_requests').delete().eq('id', b.dataset.delete);
+      if (err) return toast(errorText(err), 'error');
+      screenForget('meus-pedidos');
+      screenForget('mural');
+      toast('Pedido apagado.');
+      render();
+    };
+  });
+}
+
+async function viewPrayerModeration(ctx) {
+  if (!requireMemberFeature('/oracao/moderar', 'oracao')) return;
+  if (!isPastoral()) return navigate('/oracao');
+  const tab = ['pendente', 'privado', 'aprovado'].includes(ctx.params.get('ver')) ? ctx.params.get('ver') : 'pendente';
+  await screenShow(ctx, `moderar:${tab}`, () => loadModeration(tab), ({ rows, people }) => drawModeration(tab, rows, people));
+}
+
+async function loadModeration(tab) {
+  let query = sb
+    .from('prayer_requests')
+    .select('id, user_id, body, anonymous, status, moderated_at, cared_at, answered_at, created_at')
+    .eq('church_id', state.church.id)
+    .eq('status', tab)
+    .order('created_at', { ascending: tab === 'pendente' })
+    .limit(100);
+  if (tab === 'aprovado') query = query.gt('moderated_at', new Date(Date.now() - 30 * 864e5).toISOString());
+  const { data: rows, error } = await query;
+  if (error) throw error;
+  const ids = [...new Set(rows.map((p) => p.user_id))];
+  const { data: people } = ids.length
+    ? await sb.from('members').select('user_id, name').eq('church_id', state.church.id).in('user_id', ids)
+    : { data: [] };
+  return { rows, people: people || [] };
+}
+
+function drawModeration(tab, rows, people) {
+  const nameOf = new Map(people.map((m) => [m.user_id, m.name]));
+  const views = [
+    ['pendente', 'Para aprovar'],
+    ['privado', 'Só para a direção'],
+    ['aprovado', 'No mural'],
+  ];
+  $view.innerHTML = `
+    <div class="page">
+      <h1>Pedidos de oração</h1>
+      ${prayerTabs('/oracao/moderar')}
+      <div class="chips filters">${views
+        .map(([k, label]) => `<a class="chip ${tab === k ? 'active' : ''}" href="#/oracao/moderar?ver=${k}">${label}</a>`)
+        .join('')}</div>
+      ${tab === 'privado' ? '<p class="hint">Só o administrador e os líderes veem estes pedidos.</p>' : ''}
+      ${
+        rows.length
+          ? rows
+              .map(
+                (p) => `
+            <article class="card prayer" data-id="${p.id}">
+              <div class="tags-row">
+                ${p.anonymous ? '<span class="tag">Anônimo para os membros</span>' : ''}
+                ${p.cared_at ? '<span class="tag ok">Já cuidado</span>' : ''}
+                ${p.answered_at ? '<span class="tag ok">Deus respondeu 🙌</span>' : ''}
+              </div>
+              ${
+                tab === 'pendente'
+                  ? `<label>Pedido<textarea rows="4" maxlength="${PRAYER_MAX}" data-body>${esc(p.body)}</textarea>
+                       <small class="hint">Se precisar, corrija o texto antes de aprovar (por exemplo, para tirar um dado pessoal).</small></label>`
+                  : `<p class="pre">${esc(p.body)}</p>`
+              }
+              <p class="hint">${esc(nameOf.get(p.user_id) || 'Pessoa que saiu da instituição')} · ${esc(fmtDayMonth(p.created_at))}</p>
+              <div class="actions-row">
+                ${
+                  tab === 'pendente'
+                    ? `<button class="btn small primary" data-status="aprovado">Aprovar</button>
+                       <button class="btn small" data-status="recusado">Não publicar</button>`
+                    : tab === 'privado'
+                      ? `<button class="btn small" data-cared="${p.cared_at ? '' : '1'}">${p.cared_at ? 'Desmarcar' : 'Já orei / já entrei em contato'}</button>`
+                      : `<button class="btn small danger-outline" data-remove>Tirar do mural</button>`
+                }
+              </div>
+            </article>`,
+              )
+              .join('')
+          : `<div class="empty"><p>${tab === 'pendente' ? 'Nenhum pedido esperando aprovação.' : tab === 'privado' ? 'Nenhum pedido só para a direção.' : 'Nenhum pedido no mural.'}</p></div>`
+      }
+    </div>`;
+
+  const update = async (card, patch, done) => {
+    card.querySelectorAll('button').forEach((b) => (b.disabled = true));
+    const { data, error: err } = await sb.from('prayer_requests').update(patch).eq('id', card.dataset.id).select('id');
+    if (err || !data.length) {
+      card.querySelectorAll('button').forEach((b) => (b.disabled = false));
+      return toast(err ? errorText(err) : 'Você não tem permissão para isso.', 'error');
+    }
+    for (const t of ['pendente', 'privado', 'aprovado']) screenForget(`moderar:${t}`);
+    screenForget('mural');
+    toast(done);
+    render();
+  };
+  $view.querySelectorAll('article.prayer').forEach((card) => {
+    card.querySelectorAll('[data-status]').forEach((b) => {
+      b.onclick = () => {
+        const body = card.querySelector('[data-body]').value.trim();
+        if (body.length < 3) return toast('O pedido ficou curto demais.', 'error');
+        const approve = b.dataset.status === 'aprovado';
+        update(card, { body, status: b.dataset.status }, approve ? 'Pedido aprovado: já está no mural.' : 'Pedido não publicado. Quem pediu recebe um aviso.');
+      };
+    });
+    card.querySelector('[data-cared]')?.addEventListener('click', (e) =>
+      update(card, { cared_at: e.currentTarget.dataset.cared ? new Date().toISOString() : null }, 'Pronto.'),
+    );
+    card.querySelector('[data-remove]')?.addEventListener('click', async () => {
+      if (!await ask('Tirar este pedido do mural? Quem pediu continua vendo em "Meus pedidos".')) return;
+      update(card, { status: 'recusado' }, 'Pedido tirado do mural.');
+    });
+  });
+}
+
 
 // ---------------------------------------------------------------------
 // Inicialização

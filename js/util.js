@@ -117,6 +117,7 @@ export const FEATURES = [
   { key: 'galeria', label: 'Galeria de fotos' },
   { key: 'chat', label: 'Chat em grupos' },
   { key: 'projetos', label: 'Projetos das salas (precisa das salas)' },
+  { key: 'oracao', label: 'Pedidos de oração' },
   { key: 'pix', label: 'Pix' },
 ];
 

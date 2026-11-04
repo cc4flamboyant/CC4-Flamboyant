@@ -1084,6 +1084,82 @@ test.describe('Ícone do grupo do chat (021)', () => {
   });
 });
 
+test.describe('Pedidos de oração, ordem das salas e do chat (032)', () => {
+  const ids = {};
+  const tag = `ora-${Date.now()}`;
+  test.afterAll(async () => {
+    for (const id of [ids.priv, ids.pub].filter(Boolean)) await api.delete(rest(`prayer_requests?id=eq.${id}`), { headers: as['adm-a'].headers });
+    for (const r of [ids.r1, ids.r2].filter(Boolean)) await api.delete(rest(`kids_rooms?id=eq.${r}`), { headers: as['adm-a'].headers });
+    if (ids.group) await api.delete(rest(`chat_groups?id=eq.${ids.group}`), { headers: as['lider-a'].headers });
+  });
+
+  test('oração: só para a direção fica com a direção; para todos passa pela aprovação; anônimo para os membros', async () => {
+    const send = (who, data) => api.post(rest('prayer_requests'), { headers: returning(as[who].headers), data: { church_id: church.a, ...data } });
+    const priv = await send('membro-a', { body: `${tag} pela minha família`, audience: 'pastores' });
+    expect(priv.ok(), await priv.text()).toBe(true);
+    ids.priv = (await priv.json())[0].id;
+    const pub = await send('membro-a', { body: `${tag} pela formatura`, audience: 'igreja', anonymous: true });
+    ids.pub = (await pub.json())[0].id;
+    // Outra instituição e quem não está em nenhuma não leem nem enviam.
+    for (const who of ['adm-b', 'sem-igreja']) expect(await get(who, `prayer_requests?select=id&id=in.(${ids.priv},${ids.pub})`), who).toEqual([]);
+    expect((await send('adm-b', { body: 'De fora', audience: 'pastores' })).ok()).toBe(false);
+    // A direção (líder) lê os dois; o membro não modera.
+    expect((await get('lider-a', `prayer_requests?select=id&id=in.(${ids.priv},${ids.pub})`)).length).toBe(2);
+    const moderate = (who, status) => api.patch(rest(`prayer_requests?id=eq.${ids.pub}`), { headers: returning(as[who].headers), data: { status } });
+    expect((await moderate('membro-a', 'aprovado')).ok()).toBe(false);
+    // Pendente não vai para o mural.
+    const wall = async (who) => (await (await rpc(who, 'prayer_wall', { p_church: church.a })).json()).filter((x) => x.body.startsWith(tag));
+    expect(await wall('membro-a')).toEqual([]);
+    expect((await moderate('lider-a', 'aprovado')).ok()).toBe(true);
+    // No mural, marcado como anônimo (os outros membros não veem o nome); a direção vê quem pediu.
+    const onWall = await wall('lider-a');
+    expect(onWall).toHaveLength(1);
+    expect(onWall[0].anonymous).toBe(true);
+    expect(onWall[0].author).toBeTruthy();
+    // "Estou orando": liga e desliga, conta.
+    const t1 = await (await rpc('lider-a', 'prayer_toggle', { p_request: ids.pub })).json();
+    expect(t1[0]).toEqual({ praying: 1, i_pray: true });
+    const t2 = await (await rpc('lider-a', 'prayer_toggle', { p_request: ids.pub })).json();
+    expect(t2[0]).toEqual({ praying: 0, i_pray: false });
+    // O pedido só para a direção nunca vai ao mural.
+    const toWall = await api.patch(rest(`prayer_requests?id=eq.${ids.priv}`), { headers: returning(as['lider-a'].headers), data: { status: 'aprovado' } });
+    expect(toWall.ok()).toBe(false);
+    // A direção recebeu o aviso na central.
+    const notes = await get('lider-a', `notifications?select=url&dedupe_key=eq.${encodeURIComponent(`oracao:${ids.priv}`)}`);
+    expect(notes).toHaveLength(1);
+  });
+
+  test('salas: só a liderança muda a ordem; semana de 1 a 30', async () => {
+    const room = async (name) =>
+      (await (await api.post(rest('kids_rooms'), { headers: returning(as['adm-a'].headers), data: { church_id: church.a, name } })).json())[0].id;
+    ids.r1 = await room(`${tag} B`.slice(0, 40));
+    ids.r2 = await room(`${tag} A`.slice(0, 40));
+    expect((await rpc('membro-a', 'rooms_reorder', { p_church: church.a, p_ids: [ids.r1, ids.r2] })).ok()).toBe(false);
+    expect((await rpc('lider-a', 'rooms_reorder', { p_church: church.a, p_ids: [ids.r1, ids.r2] })).ok()).toBe(true);
+    const list = (await (await rpc('lider-a', 'rooms_list', { p_church: church.a })).json()).filter((r) => r.id === ids.r1 || r.id === ids.r2);
+    expect(list.map((r) => r.id)).toEqual([ids.r1, ids.r2]); // a ordem gravada, não a do nome
+    const week = (n) => api.patch(rest(`kids_rooms?id=eq.${ids.r1}`), { headers: returning(as['lider-a'].headers), data: { week: n } });
+    expect((await week(31)).ok()).toBe(false);
+    expect((await week(12)).ok()).toBe(true);
+  });
+
+  test('chat: cada pessoa ordena a própria lista; o grupo vai para o Início só pelo administrador', async () => {
+    const [{ id: membro }] = await get('adm-a', `members?select=id&church_id=eq.${church.a}&user_id=eq.${as['membro-a'].id}`);
+    const g = await rpc('lider-a', 'chat_create_group', { p_church: church.a, p_name: `${tag} grupo`, p_description: null, p_locked: false, p_members: [membro] });
+    ids.group = await g.json();
+    const home = (who, on) => api.patch(rest(`chat_groups?id=eq.${ids.group}`), { headers: returning(as[who].headers), data: { show_on_home: on } });
+    expect(await (await home('membro-a', true)).text()).not.toContain(ids.group);
+    expect((await home('lider-a', true)).ok()).toBe(true);
+    expect((await (await rpc('membro-a', 'chat_group_list', { p_church: church.a })).json()).find((x) => x.id === ids.group).show_on_home).toBe(true);
+    // A ordem do membro não muda a da líder.
+    expect((await rpc('membro-a', 'chat_reorder', { p_church: church.a, p_ids: [ids.group] })).ok()).toBe(true);
+    const mine = (await (await rpc('membro-a', 'chat_group_list', { p_church: church.a })).json()).find((x) => x.id === ids.group);
+    const hers = (await (await rpc('lider-a', 'chat_group_list', { p_church: church.a })).json()).find((x) => x.id === ids.group);
+    expect(mine.sort_order).toBe(1);
+    expect(hers.sort_order).toBeNull();
+  });
+});
+
 test.describe('Quem reagiu e reações no chat (027)', () => {
   const ids = {};
   test.afterAll(async () => {

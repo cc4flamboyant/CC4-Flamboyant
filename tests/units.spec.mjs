@@ -246,6 +246,7 @@ const SEM_GUARDADO = {
   viewMyData: 'o banco só é chamado ao tocar nos botões',
   viewHelp: 'só textos',
   viewOffer: 'chave Pix da igreja já carregada',
+  viewPrayerForm: 'só o formulário do pedido de oração (o banco só é chamado ao enviar)',
   viewCardVerify: 'conferência pública da carteirinha: sempre pergunta ao banco (mostra "Conferindo…" antes)',
 };
 const CACHE = /\b(screenShow|screenShowWithPhotos|showWithGalleryLinks|editItem|formFresh|screenCached)\(|membersCache\.get\(/;

@@ -47,9 +47,9 @@ test('a liderança vê todos, com a idade, e pode imprimir', async ({ page }) =>
   await page.emulateMedia({ media: 'print' });
   await expect(page.locator('.sheet-foot')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Imprimir ou salvar PDF' })).toBeHidden();
-  await expect(page.getByRole('link', { name: '← Aniversariantes' })).toBeHidden();
+  await expect(page.getByRole('link', { name: 'Aniversariantes', exact: true })).toBeHidden();
   await page.emulateMedia({ media: 'screen' });
-  await page.getByRole('link', { name: '← Aniversariantes' }).click();
+  await page.getByRole('link', { name: 'Aniversariantes', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Aniversariantes de abril' })).toBeVisible();
 
   // A folha de março traz as pessoas, sem fotos.

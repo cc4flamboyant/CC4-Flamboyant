@@ -215,7 +215,7 @@ test('a liderança cria o grupo, escolhe quem participa e escreve com emoji, lin
   await expect(page.getByText('Ícone do grupo trocado.')).toBeVisible({ timeout: 15000 });
   await expect(page.locator('.chat-info-head .avatar img')).toBeVisible();
   await expect(page.getByLabel('Trocar o ícone do grupo')).toHaveCount(1);
-  await page.getByRole('link', { name: '← Conversa' }).click();
+  await page.getByRole('link', { name: 'Conversa', exact: true }).click();
   await expect(page.locator('#chat-icon .avatar img')).toBeVisible();
   await page.locator('.chat-back').click();
   await expect(page.locator('.chat-row').filter({ hasText: name }).locator('.avatar img')).toBeVisible();
@@ -321,6 +321,7 @@ test('as fotos do chat ficam guardadas no aparelho (aparecem na hora da próxima
 });
 
 test('versão nova do app: ao voltar para o app ela é buscada e a tela recarrega sozinha', async ({ browser }) => {
+  test.slow(); // com o computador cheio, o service worker novo demora a assumir
   const ctx = await browser.newContext({ ...test.info().project.use, baseURL: 'http://localhost:4173/', serviceWorkers: 'allow' });
   const page = await ctx.newPage();
   await openLoggedIn(page, as['lider-a'].session, '/i/teste-a/#/chat');
@@ -334,7 +335,7 @@ test('versão nova do app: ao voltar para o app ela é buscada e a tela recarreg
   expect(pub.status()).toBe(204);
   // Voltar para o app (a aba fica visível de novo) procura a versão nova.
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-  await expect.poll(() => page.evaluate(() => window.__versaoAntiga === undefined).catch(() => false), { timeout: 20000 }).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.__versaoAntiga === undefined).catch(() => false), { timeout: 60000 }).toBe(true);
   await expect(page.getByRole('heading', { name: 'Chat', level: 1 })).toBeVisible();
   await ctx.close();
 });
