@@ -812,7 +812,7 @@ async function loadMemberships() {
   const [mem, pa] = await Promise.all([
     sb
       .from('members')
-      .select('id, role, consent_at, name, gallery_team, tutor_rooms:kids_rooms(id), church:churches(id, slug, name, logo_url, primary_color)')
+      .select('id, role, consent_at, name, photo_path, gallery_team, tutor_rooms:kids_rooms(id), church:churches(id, slug, name, logo_url, primary_color)')
       .eq('user_id', state.user.id)
       .eq('status', 'ativo'),
     sb.rpc('is_platform_admin'),
@@ -820,6 +820,52 @@ async function loadMemberships() {
   if (mem.error) throw mem.error;
   state.memberships = (mem.data || []).filter((m) => m.church).sort((a, b) => a.church.name.localeCompare(b.church.name));
   state.platformAdmin = !!pa.data;
+  googlePhotoFill().catch(() => {}); // em segundo plano, sem travar a tela
+}
+
+// Foto do Google: quem entrou com a conta Google e está sem foto recebe a foto do Google,
+// copiada para a pasta das fotos (como se tivesse escolhido no aparelho). Uma vez por cadastro:
+// a lista fica na própria conta (user_metadata.foto_google), então quem remover a foto depois
+// não a vê voltar, nem em outro aparelho. Quem já tem foto não muda.
+let googlePhotoBusy = false;
+async function googlePhotoFill() {
+  const meta = state.user?.user_metadata || {};
+  const url = meta.avatar_url || meta.picture;
+  const app = state.user?.app_metadata || {};
+  const google = app.providers?.includes('google') || app.provider === 'google';
+  // Só o endereço de fotos do Google (o mesmo liberado no connect-src da CSP).
+  if (googlePhotoBusy || !url || !google || !String(url).startsWith('https://lh3.googleusercontent.com/')) return;
+  const done = Array.isArray(meta.foto_google) ? meta.foto_google : [];
+  const todo = state.memberships.filter((m) => m.consent_at && !m.photo_path && !done.includes(m.id));
+  if (!todo.length) return;
+  googlePhotoBusy = true;
+  try {
+    const res = await fetch(url.replace(/=s\d+(-c)?$/, '=s800-c'), { credentials: 'omit' });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    if (!blob.type.startsWith('image/')) return;
+    const added = [];
+    for (const m of todo) {
+      try {
+        const path = await uploadMemberPhoto(m.church.id, m.id, blob); // o mesmo da foto escolhida
+        // .is(..., null): se a pessoa pôs uma foto nesse meio-tempo, não sobrescreve.
+        const { error } = await sb.from('members').update({ photo_path: path }).eq('id', m.id).is('photo_path', null);
+        if (error) throw error;
+        m.photo_path = path;
+        added.push(m.id);
+      } catch {
+        // Tenta de novo na próxima vez que o app abrir.
+      }
+    }
+    if (!added.length) return;
+    await sb.auth.updateUser({ data: { foto_google: [...done, ...added] } }).catch(() => {});
+    // As telas que mostram a foto buscam de novo.
+    forgetMembers();
+    screenForget('perfil');
+    saveBootCache();
+  } finally {
+    googlePhotoBusy = false;
+  }
 }
 
 // Pergunta ao Supabase (endereço público) se o login com Google está ligado; guarda a resposta.
@@ -1825,7 +1871,7 @@ function helpTopics() {
       : []),
     [
       'Meu cadastro e privacidade',
-      `<p>Em <a href="#/perfil">Menu &gt; Meu cadastro</a> você corrige o nome, o telefone, a data de nascimento e a foto, e escolhe se os outros membros veem essas datas e o seu telefone. Para trocar o e-mail, fale com a secretaria.</p>
+      `<p>Em <a href="#/perfil">Menu &gt; Meu cadastro</a> você corrige o nome, o telefone, a data de nascimento e a foto (quem entra com a conta Google e está sem foto recebe a foto do Google; dá para trocar ou remover), e escolhe se os outros membros veem essas datas e o seu telefone. Para trocar o e-mail, fale com a secretaria.</p>
        <p>Em <a href="#/meus-dados">Menu &gt; Meus dados</a> você baixa tudo o que o app guarda sobre você, sai desta instituição de ensino ou exclui a sua conta.</p>`,
     ],
     [
