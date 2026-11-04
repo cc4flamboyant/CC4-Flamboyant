@@ -308,8 +308,12 @@ legend { font-weight: 700; padding: 0 4px; }
 /* Organizar arrastando (salas e chat): a alça ≡ à direita do item. */
 .sort-row { display: flex; align-items: center; gap: 4px; }
 .sort-row > a { flex: 1; min-width: 0; }
-.sort-row.sorting { position: relative; z-index: 2; opacity: .92; }
-.sort-row.sorting > a { box-shadow: 0 8px 24px rgb(0 0 0 / .18); }
+.sort-row { position: relative; will-change: transform; }
+.sort-row > a { transition: box-shadow .22s ease, border-color .22s ease; }
+.sort-row.sorting, .sort-row.settling { z-index: 3; }
+.sort-row.sorting > a { box-shadow: 0 12px 28px rgb(0 0 0 / .2); border-color: var(--brand); }
+.sort-row.sorting .grip { color: var(--link); background: var(--brand-soft); }
+.sorting-now, .sorting-now * { -webkit-user-select: none; user-select: none; cursor: grabbing; }
 .grip { display: grid; place-items: center; width: 40px; height: 48px; flex: none; padding: 0; border: 0; border-radius: 10px; background: none; color: var(--muted); cursor: grab; touch-action: none; }
 .grip svg { width: 22px; height: 22px; stroke-width: 2.2; }
 .grip:active { cursor: grabbing; background: var(--brand-soft); }

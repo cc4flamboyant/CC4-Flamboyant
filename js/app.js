@@ -4625,6 +4625,19 @@ function drawChatGroups(groups, urls = {}) {
 // para cima e para baixo na alça fazem o mesmo.
 const gripButton = (name) =>
   `<button type="button" class="grip" data-grip aria-label="Mudar a ordem de ${esc(name)}" title="Arraste para mudar a ordem">${icon.grip}</button>`;
+// Movimento suave: o item "levanta" ao pegar, os vizinhos deslizam para o lugar novo e, ao
+// soltar, o item desliza até o lugar dele (quem pediu menos movimento no celular não vê animação).
+const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Desliza um elemento de onde estava (dy) até onde está agora.
+function slideFrom(el, dy) {
+  if (!dy || calm()) return;
+  el.style.transition = 'none';
+  el.style.transform = `translateY(${dy}px)`;
+  void el.offsetHeight; // aplica o ponto de partida antes de animar
+  el.style.transition = 'transform .22s cubic-bezier(.2, .8, .2, 1)';
+  el.style.transform = '';
+  el.addEventListener('transitionend', () => (el.style.transition = ''), { once: true });
+}
 function sortable(list, onDrop) {
   const ids = () => [...list.querySelectorAll('[data-sort-id]')].map((x) => x.dataset.sortId);
   list.addEventListener('pointerdown', (e) => {
@@ -4634,25 +4647,45 @@ function sortable(list, onDrop) {
     const item = grip.closest('[data-sort-id]');
     const before = ids().join();
     let startY = e.clientY;
+    let dy = 0;
+    item.style.transition = '';
     item.classList.add('sorting');
-    navigator.vibrate?.(10);
+    document.documentElement.classList.add('sorting-now'); // sem selecionar texto enquanto arrasta
+    navigator.vibrate?.(8);
+    const place = () => (item.style.transform = `translateY(${dy}px) scale(${calm() ? 1 : 1.02})`);
+    place();
     const move = (ev) => {
-      let dy = ev.clientY - startY;
+      dy = ev.clientY - startY;
       const next = item.nextElementSibling?.matches('[data-sort-id]') ? item.nextElementSibling : null;
       const prev = item.previousElementSibling?.matches('[data-sort-id]') ? item.previousElementSibling : null;
-      const top = item.offsetTop;
-      if (next && dy > next.offsetHeight / 2) list.insertBefore(next, item);
-      else if (prev && dy < -prev.offsetHeight / 2) list.insertBefore(item, prev);
-      startY += item.offsetTop - top; // o lugar novo vira o ponto de partida
-      dy = ev.clientY - startY;
-      item.style.transform = `translateY(${dy}px)`;
+      // Troca quando o item passa da metade do vizinho; o vizinho desliza para o lugar novo.
+      const other = next && dy > next.offsetHeight / 2 ? next : prev && dy < -prev.offsetHeight / 2 ? prev : null;
+      if (other) {
+        const otherTop = other.offsetTop;
+        const top = item.offsetTop;
+        if (other === next) list.insertBefore(next, item);
+        else list.insertBefore(item, prev);
+        startY += item.offsetTop - top; // o lugar novo vira o ponto de partida
+        dy = ev.clientY - startY;
+        slideFrom(other, otherTop - other.offsetTop);
+        navigator.vibrate?.(4);
+      }
+      place();
     };
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
-      item.style.transform = '';
+      document.documentElement.classList.remove('sorting-now');
+      // Desliza até o lugar e "pousa" (a sombra some aos poucos).
       item.classList.remove('sorting');
+      item.classList.add('settling');
+      item.style.transition = calm() ? 'none' : 'transform .22s cubic-bezier(.2, .8, .2, 1)';
+      item.style.transform = '';
+      setTimeout(() => {
+        item.classList.remove('settling');
+        item.style.transition = '';
+      }, 240);
       if (ids().join() !== before) onDrop(ids());
     };
     window.addEventListener('pointermove', move);
@@ -4668,8 +4701,12 @@ function sortable(list, onDrop) {
     const item = grip.closest('[data-sort-id]');
     const other = e.key === 'ArrowUp' ? item.previousElementSibling : item.nextElementSibling;
     if (!other?.matches('[data-sort-id]')) return;
+    const itemTop = item.offsetTop;
+    const otherTop = other.offsetTop;
     if (e.key === 'ArrowUp') list.insertBefore(item, other);
     else list.insertBefore(other, item);
+    slideFrom(item, itemTop - item.offsetTop);
+    slideFrom(other, otherTop - other.offsetTop);
     grip.focus();
     onDrop(ids());
   });
