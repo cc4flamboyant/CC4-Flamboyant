@@ -1,0 +1,24 @@
+# Mantém o projeto gratuito do Supabase ativo.
+# O Supabase pausa projetos gratuitos depois de 7 dias sem atividade.
+# Todo dia de madrugada o GitHub (na nuvem, sem depender de nenhum computador)
+# faz uma consulta pequena ao banco usando só a chave pública (a mesma do site).
+# O registro mostra só o código da resposta (ex.: 200), nunca os dados.
+name: Manter Supabase ativo
+
+on:
+  schedule:
+    - cron: "0 6 * * *"   # 06:00 UTC = 03:00 em Brasília
+  workflow_dispatch:       # permite rodar na mão pela aba Actions
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Consultar o banco
+        run: |
+          curl -fsS --retry 3 --retry-delay 20 -o /dev/null -w "HTTP %{http_code}\n" \
+            "https://gtwavjxnzrggegtsajyu.supabase.co/rest/v1/churches?select=id&limit=1" \
+            -H "apikey: sb_publishable_L5M8NltxPFmPN_q-BRF96w_Z0AD3r6X"
