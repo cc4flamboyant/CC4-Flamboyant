@@ -1,0 +1,36 @@
+name: Manter Supabase ativo
+
+on:
+  schedule:
+    - cron: "0 6 * * *"   # 06:00 UTC = 03:00 em Brasília
+  workflow_dispatch:       # permite rodar na mão pela aba Actions
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Consultar o banco
+        run: |
+          curl -fsS --retry 3 --retry-delay 20 -o /dev/null -w "HTTP %{http_code}\n" \
+            "https://gtwavjxnzrggegtsajyu.supabase.co/rest/v1/churches?select=id&limit=1" \
+            -H "apikey: sb_publishable_L5M8NltxPFmPN_q-BRF96w_Z0AD3r6X"
+
+  religar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Religar os agendamentos
+        run: |
+          gh api "repos/$REPO/actions/workflows" --paginate \
+            -q '.workflows[] | select(.state == "active" or .state == "disabled_inactivity") | .id' |
+          while read -r id; do
+            gh api -X PUT "repos/$REPO/actions/workflows/$id/enable" && echo "religado: $id"
+          done
